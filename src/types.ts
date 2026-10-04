@@ -61,8 +61,9 @@ export interface StoredUser {
   password: string
   role?: 'Citizen' | 'Driver' | 'Admin'
   greenPoints?: number
-  createdAt: string
+  createdAt?: string
   city?: string
+  ward?: string
 }
 
 export interface UserSession {
@@ -70,6 +71,7 @@ export interface UserSession {
   email: string
   role: 'Citizen' | 'Driver' | 'Admin'
   city?: string
+  ward?: string
 }
 
 export interface UserLocationState {
@@ -117,6 +119,7 @@ export interface NotificationItem {
   read: boolean
   type: 'pickup' | 'report' | 'reward' | 'system'
   actionUrl?: string
+  createdAt?: string
 }
 
 export interface WardMetric {

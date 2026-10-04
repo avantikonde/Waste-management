@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Activity, CheckCircle2, Truck, Bell, FileText } from 'lucide-react'
 import { database } from '../database'
 import { formatRelativeTime } from '../utils/dateUtils'
@@ -14,11 +14,13 @@ interface ActivityItem {
 }
 
 export function ActivityView() {
+  const [mountTime] = useState(() => Date.now())
+
   const items = useMemo(() => {
     const reports = database.getReports()
     const pickups = database.getPickups()
     const notifications = database.getNotifications()
-    const now = Date.now()
+    const now = mountTime
 
     const list: ActivityItem[] = []
 
@@ -67,7 +69,7 @@ export function ActivityView() {
     // Sort descending by timestamp
     list.sort((a, b) => b.timestamp - a.timestamp)
     return list
-  }, [])
+  }, [mountTime])
 
   return (
     <div className="page-content">
