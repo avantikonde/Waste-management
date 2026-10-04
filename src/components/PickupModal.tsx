@@ -15,9 +15,9 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
   const [date, setDate] = useState(() => new Date(Date.now() + 86400000).toISOString().split('T')[0])
   const [timeSlot, setTimeSlot] = useState('08:00 – 10:00 AM')
   const [address, setAddress] = useState(() =>
-    userLoc.city === 'Pune' ? 'Bluebell Heights, Viman Nagar, Pune' : `${userLoc.area || 'Ward Area'}, ${userLoc.city}`
+    userLoc.area ? `${userLoc.area}, ${userLoc.city}` : `${userLoc.city || 'Pune'}`
   )
-  const [contact, setContact] = useState('+91 98765 43210')
+  const [contact, setContact] = useState('')
   const [instructions, setInstructions] = useState('')
 
   const timeSlots = [

@@ -379,6 +379,41 @@ export const puneWards: WardMetric[] = [
   { id: 'W-P5', name: 'Hinjewadi - PCMC Tech Corridor', cleanlinessScore: 78, openReports: 7, resolvedToday: 12, activeFleet: 4, status: 'Critical' },
 ]
 
+export const defaultUsers: StoredUser[] = [
+  {
+    name: 'Rohan Patil',
+    email: 'rohan.patil@cleanconnect.pune',
+    password: 'password123',
+    role: 'Citizen',
+    ward: 'Shivajinagar - Ghole Rd (PMC Ward 1)',
+    city: 'Pune',
+    greenPoints: 1240,
+  },
+  {
+    name: 'Avantika Kumar',
+    email: 'avantika.k@pune-clean.gov.in',
+    password: 'password123',
+    role: 'Citizen',
+    ward: 'Kothrud - Bavdhan (PMC Ward 2)',
+    city: 'Pune',
+    greenPoints: 2150,
+  },
+  {
+    name: 'Driver Ravi Kumar',
+    email: 'driver.ravi@cleanconnect.pune',
+    password: 'password123',
+    role: 'Driver',
+    city: 'Pune',
+  },
+  {
+    name: 'Supervisor Deshmukh',
+    email: 'admin.deshmukh@cleanconnect.pune',
+    password: 'password123',
+    role: 'Admin',
+    city: 'Pune',
+  },
+]
+
 export const database = {
   // Session & Authentication
   getSession(): UserSession | null {
@@ -395,7 +430,10 @@ export const database = {
   },
 
   getUsers(): StoredUser[] {
-    return read<StoredUser[]>(keys.users, [])
+    const stored = read<StoredUser[]>(keys.users, [])
+    if (stored.length > 0) return stored
+    write(keys.users, defaultUsers)
+    return defaultUsers
   },
 
   register(user: StoredUser): UserSession {
@@ -439,19 +477,22 @@ export const database = {
     notifyListeners()
   },
 
-  updateProfile(name: string, email: string, city?: string): UserSession {
+  updateProfile(name: string, email: string, city?: string, ward?: string): UserSession {
     const current = database.getSession()
     const updated: UserSession = {
       name: name.trim(),
       email: email.trim(),
       role: current?.role || 'Citizen',
       city: city || current?.city || 'Pune',
+      ward: ward || current?.ward || 'Shivajinagar - Ghole Rd (PMC Ward 1)',
     }
     write(keys.session, updated)
 
     // Sync in users list
     const users = database.getUsers().map((u) =>
-      u.email.toLowerCase() === (current?.email || '').toLowerCase() ? { ...u, name: updated.name, email: updated.email } : u
+      u.email.toLowerCase() === (current?.email || '').toLowerCase()
+        ? { ...u, name: updated.name, email: updated.email, ward: updated.ward, city: updated.city }
+        : u
     )
     write(keys.users, users)
 

@@ -171,14 +171,14 @@ export function PickupRequestsView({
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                type="button"
+              <a
+                href={`tel:${activePickup.contact || '+91 98220 44123'}`}
                 className="outline-btn"
-                style={{ flex: 1 }}
-                onClick={() => onToast('Contacting driver Ravi K. (+91 98765 43210)...')}
+                style={{ flex: 1, textDecoration: 'none', justifyContent: 'center' }}
+                onClick={() => onToast(`Calling driver ${activePickup.driverName || 'Ravi K.'} (${activePickup.contact || '+91 98220 44123'})...`)}
               >
                 <Phone size={14} /> Call Driver
-              </button>
+              </a>
               <button
                 type="button"
                 className="primary-btn"

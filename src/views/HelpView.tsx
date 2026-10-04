@@ -29,7 +29,7 @@ export function HelpView({ onToast }: HelpViewProps) {
     },
     {
       q: 'How do I redeem my Green Points for real perks?',
-      a: 'Green Points are earned for reporting waste, attending cleanup drives, and segregating waste. Head to "Community & Rewards" to redeem vouchers for Namma Metro travel passes, home composting kits, or municipal property tax rebate tokens.',
+      a: 'Green Points are earned for reporting waste, attending cleanup drives, and segregating waste. Head to "Community & Rewards" to redeem vouchers for City Metro & transit passes, home composting kits, or municipal property tax rebate tokens.',
     },
   ]
 

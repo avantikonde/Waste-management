@@ -1,53 +1,69 @@
-import { Activity, CheckCircle2, Truck, Award, Calendar } from 'lucide-react'
-import { getCurrentMonthName } from '../utils/dateUtils'
+import { Activity, CheckCircle2, Truck, Bell, FileText } from 'lucide-react'
+import { database } from '../database'
+import { formatRelativeTime } from '../utils/dateUtils'
 
 export function ActivityView() {
-  const currentMonth = getCurrentMonthName()
+  const reports = database.getReports()
+  const pickups = database.getPickups()
+  const notifications = database.getNotifications()
 
-  const events = [
-    {
-      title: 'Collection vehicle dispatched for Pickup PK-2026-004120',
-      time: '10:02 AM today',
-      category: 'Pickup',
-      icon: <Truck size={14} />,
-      desc: 'Driver Ravi K. (MH 12 AB 2840) marked en route from East Depot to Bluebell Heights, Viman Nagar.',
-    },
-    {
-      title: 'Civic Report CW-2026-009102 assigned to PMC Crew #4',
-      time: '09:51 AM today',
+  // Synthesize dynamic activity feed from live database items
+  interface ActivityItem {
+    id: string
+    title: string
+    time: string
+    category: string
+    icon: typeof Activity
+    desc: string
+    timestamp: number
+  }
+
+  const items: ActivityItem[] = []
+
+  // Add reports activity
+  reports.slice(0, 5).forEach((r) => {
+    const ts = r.createdAt ? new Date(r.createdAt).getTime() : Date.now()
+    items.push({
+      id: `act-rep-${r.id}`,
+      title: `Civic Report ${r.id} (${r.type})`,
+      time: formatRelativeTime(r.createdAt) || 'Recent',
       category: 'Report',
-      icon: <CheckCircle2 size={14} />,
-      desc: 'Ward dispatcher assigned rapid clearance squad for FC Road commercial mixed waste accumulation.',
-    },
-    {
-      title: 'Doorstep pickup request PK-2026-004120 verified',
-      time: '09:48 AM today',
+      icon: r.status === 'Resolved' ? CheckCircle2 : FileText,
+      desc: `${r.location} · Status: ${r.status}${r.assignedDriver ? ` · Assigned to ${r.assignedDriver}` : ''}`,
+      timestamp: ts,
+    })
+  })
+
+  // Add pickups activity
+  pickups.slice(0, 4).forEach((p) => {
+    const ts = p.createdAt ? new Date(p.createdAt).getTime() : Date.now() - 3600000
+    items.push({
+      id: `act-pick-${p.id}`,
+      title: `Doorstep Collection: ${p.id}`,
+      time: p.createdAt ? formatRelativeTime(p.createdAt) : p.date,
       category: 'Pickup',
-      icon: <Truck size={14} />,
-      desc: 'Society segregated waste request confirmed for 08:00 - 10:00 AM slot.',
-    },
-    {
-      title: '+50 Green Points credited to your account',
-      time: 'Yesterday at 04:30 PM',
-      category: 'Rewards',
-      icon: <Award size={14} />,
-      desc: 'Debris report in Kothrud was verified and cleared by the PMC Heavy Squad.',
-    },
-    {
-      title: 'Report CW-2026-009071 resolved & cleared',
-      time: 'Yesterday at 02:15 PM',
-      category: 'Clearance',
-      icon: <CheckCircle2 size={14} />,
-      desc: 'PMC Heavy Squad cleared 210 kg of construction rubble from residential lane turning.',
-    },
-    {
-      title: `Joined ${currentMonth} Ward Cleanup Walk RSVP`,
-      time: 'Earlier this week',
-      category: 'Community',
-      icon: <Calendar size={14} />,
-      desc: 'Reserved volunteer spot for the Riverbank Eco-Walk & Plastic Drive on Saturday.',
-    },
-  ]
+      icon: Truck,
+      desc: `${p.type} (${p.quantity || '10-25 kg'}) scheduled for ${p.date} · ${p.address}`,
+      timestamp: ts,
+    })
+  })
+
+  // Add system notifications
+  notifications.slice(0, 3).forEach((n) => {
+    const ts = n.createdAt ? new Date(n.createdAt).getTime() : Date.now() - 7200000
+    items.push({
+      id: `act-notif-${n.id}`,
+      title: n.title,
+      time: n.time || 'Recently',
+      category: 'System',
+      icon: Bell,
+      desc: n.message,
+      timestamp: ts,
+    })
+  })
+
+  // Sort descending by timestamp
+  items.sort((a, b) => b.timestamp - a.timestamp)
 
   return (
     <div className="page-content">
@@ -59,47 +75,49 @@ export function ActivityView() {
           </div>
           <h1>System Activity Timeline</h1>
           <p className="page-subtitle">
-            A transparent record of reports, dispatches, verifications, and reward achievements.
+            A transparent, live record of civic reports, driver dispatches, and doorstep collections.
           </p>
         </div>
       </div>
 
-      <div className="panel" style={{ maxWidth: '800px' }}>
+      <div className="panel" style={{ maxWidth: '850px' }}>
         <div className="panel-header">
           <div className="panel-title-wrap">
             <p>Chronological Stream</p>
-            <h2>Recent Events</h2>
+            <h2>Live Neighborhood Events ({items.length})</h2>
           </div>
           <Activity size={18} color="var(--primary)" />
         </div>
 
         <div className="timeline-stepper" style={{ paddingLeft: '32px' }}>
-          {events.map((e, idx) => (
-            <div key={idx} className="timeline-step completed">
-              <div
-                className="step-marker"
-                style={{
-                  backgroundColor: 'var(--primary-light)',
-                  borderColor: 'var(--primary)',
-                  color: 'var(--primary)',
-                }}
-              >
-                {e.icon}
-              </div>
-              <div className="step-content">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <strong>{e.title}</strong>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                    {e.time}
-                  </span>
+          {items.map((e) => {
+            const Icon = e.icon
+            return (
+              <div key={e.id} className="timeline-step completed">
+                <div
+                  className="step-marker"
+                  style={{
+                    backgroundColor: 'var(--primary-light)',
+                    borderColor: 'var(--primary)',
+                    color: 'var(--primary)',
+                  }}
+                >
+                  <Icon size={14} />
                 </div>
-                <small style={{ marginTop: '3px' }}>{e.desc}</small>
+                <div className="step-content">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <strong>{e.title}</strong>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {e.time}
+                    </span>
+                  </div>
+                  <small style={{ marginTop: '3px' }}>{e.desc}</small>
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
   )
 }
-

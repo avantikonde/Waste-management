@@ -19,8 +19,14 @@ interface AdminViewProps {
 
 export function AdminView({ reports, onRefreshReports, onToast }: AdminViewProps) {
   const wards: WardMetric[] = database.getWards()
-  const unassignedReports = reports.filter((r) => r.status === 'Submitted')
+  const [triageFilter, setTriageFilter] = useState<'Active' | 'Unassigned' | 'All'>('Active')
   const [selectedDriver, setSelectedDriver] = useState(`${municipalDrivers[0].name} (${municipalDrivers[0].vehicleNumber})`)
+
+  const triageReports = reports.filter((r) => {
+    if (triageFilter === 'Unassigned') return r.status === 'Submitted'
+    if (triageFilter === 'Active') return r.status !== 'Resolved'
+    return true
+  })
 
   const handleDispatch = (reportId: string) => {
     const driver = municipalDrivers.find((d) => selectedDriver.includes(d.name)) || municipalDrivers[0]
@@ -101,35 +107,53 @@ export function AdminView({ reports, onRefreshReports, onToast }: AdminViewProps
 
       {/* Live Dispatch Board */}
       <section className="panel" style={{ marginBottom: '24px' }}>
-        <div className="panel-header">
+        <div className="panel-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
           <div className="panel-title-wrap">
-            <p>Rapid Triage</p>
-            <h2>Unassigned Citizen Reports ({unassignedReports.length})</h2>
+            <p>Fleet Dispatch Operations</p>
+            <h2>Citizen Reports Triage ({triageReports.length})</h2>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Target Fleet:</span>
-            <select
-              className="select-filter"
-              value={selectedDriver}
-              onChange={(e) => setSelectedDriver(e.target.value)}
-            >
-              {municipalDrivers.map((d) => (
-                <option key={d.name} value={`${d.name} (${d.vehicleNumber})`}>
-                  {d.name} · {d.vehicleNumber} ({d.zone})
-                </option>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {/* Filter Pills */}
+            <div className="filter-pill-group">
+              {(['Active', 'Unassigned', 'All'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`filter-pill ${triageFilter === tab ? 'active' : ''}`}
+                  onClick={() => setTriageFilter(tab)}
+                  style={{ padding: '4px 10px', fontSize: '11.5px' }}
+                >
+                  {tab}
+                </button>
               ))}
-            </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Target Crew:</span>
+              <select
+                className="select-filter"
+                value={selectedDriver}
+                onChange={(e) => setSelectedDriver(e.target.value)}
+              >
+                {municipalDrivers.map((d) => (
+                  <option key={d.name} value={`${d.name} (${d.vehicleNumber})`}>
+                    {d.name} · {d.vehicleNumber} ({d.zone})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {unassignedReports.length === 0 ? (
+        {triageReports.length === 0 ? (
           <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <CheckCircle2 size={32} color="var(--primary)" style={{ margin: '0 auto 8px' }} />
-            <strong>All incoming citizen waste reports are currently dispatched!</strong>
+            <strong>No reports matching "{triageFilter}". All active routes are clean!</strong>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {unassignedReports.map((report) => (
+            {triageReports.map((report) => (
               <div
                 key={report.id}
                 style={{
@@ -154,16 +178,19 @@ export function AdminView({ reports, onRefreshReports, onToast }: AdminViewProps
                         fontSize: '11px',
                         padding: '2px 6px',
                         borderRadius: 'var(--radius-sm)',
-                        backgroundColor: 'var(--rose-light)',
-                        color: 'var(--rose)',
+                        backgroundColor: report.priority === 'Critical' ? '#fef2f2' : report.priority === 'High' ? 'var(--rose-light)' : 'var(--bg-subtle)',
+                        color: report.priority === 'Critical' ? '#991b1b' : report.priority === 'High' ? 'var(--rose)' : 'var(--text-secondary)',
                         fontWeight: 700,
                       }}
                     >
                       {report.priority}
                     </span>
+                    <span className={`status-pill ${report.status.toLowerCase().replace(/\s+/g, '-')}`}>
+                      {report.status}
+                    </span>
                   </div>
                   <small style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                    {report.id} · {report.location} · {report.time}
+                    {report.id} · {report.location} · Assigned: <strong style={{ color: 'var(--text-primary)' }}>{report.assignedDriver || 'Pending Crew'}</strong> ({report.vehicleNumber || 'No Truck'})
                   </small>
                 </div>
 
@@ -173,7 +200,7 @@ export function AdminView({ reports, onRefreshReports, onToast }: AdminViewProps
                   style={{ width: 'auto', padding: '8px 16px', fontSize: '12px' }}
                   onClick={() => handleDispatch(report.id)}
                 >
-                  <Send size={13} /> Dispatch to Selected Crew
+                  <Send size={13} /> {report.assignedDriver ? 'Reassign Crew' : 'Dispatch Crew'}
                 </button>
               </div>
             ))}

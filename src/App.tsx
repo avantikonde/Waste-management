@@ -280,6 +280,27 @@ export default function App() {
 
   // Determine active view based on role & navigation
   const renderActiveView = () => {
+    // Universal routes accessible across all roles
+    if (activeNav === 'Settings') {
+      return (
+        <SettingsView
+          session={session}
+          onUpdateProfile={(updatedName, updatedEmail, updatedCity) => {
+            setSession((curr) =>
+              curr
+                ? { ...curr, name: updatedName, email: updatedEmail, city: updatedCity }
+                : null
+            )
+          }}
+          onToast={showToast}
+        />
+      )
+    }
+
+    if (activeNav === 'Help center') {
+      return <HelpView onToast={showToast} />
+    }
+
     if (role === 'Driver') {
       switch (activeNav) {
         case 'Route Map':

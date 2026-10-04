@@ -165,7 +165,15 @@ export function NearbyWasteView({
           <select
             className="select-filter"
             style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
-            value={userLoc.city.toLowerCase().includes('pune') ? 'pune' : userLoc.city.toLowerCase().includes('bengaluru') ? 'bengaluru' : 'pune'}
+            value={
+              userLoc.city.toLowerCase().includes('mumbai')
+                ? 'mumbai'
+                : userLoc.city.toLowerCase().includes('delhi')
+                  ? 'delhi'
+                  : userLoc.city.toLowerCase().includes('bengaluru')
+                    ? 'bengaluru'
+                    : 'pune'
+            }
             onChange={(e) => handleCitySelect(e.target.value)}
           >
             <option value="pune">Pune (Current Area)</option>

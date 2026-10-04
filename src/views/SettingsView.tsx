@@ -15,10 +15,31 @@ export function SettingsView({ session, onUpdateProfile, onToast }: SettingsView
   const [name, setName] = useState(session?.name || '')
   const [email, setEmail] = useState(session?.email || '')
   const [city, setCity] = useState(userLoc.city || 'Pune')
-  const [ward, setWard] = useState('Shivajinagar - Ghole Rd (PMC Ward 1)')
-  const [notifReports, setNotifReports] = useState(true)
-  const [notifPickups, setNotifPickups] = useState(true)
-  const [notifDrives, setNotifDrives] = useState(false)
+  const [ward, setWard] = useState(session?.ward || 'Shivajinagar - Ghole Rd (PMC Ward 1)')
+  const [notifReports, setNotifReports] = useState(() => {
+    try {
+      const p = localStorage.getItem('cleanconnect.notif.reports')
+      return p !== null ? p === 'true' : true
+    } catch {
+      return true
+    }
+  })
+  const [notifPickups, setNotifPickups] = useState(() => {
+    try {
+      const p = localStorage.getItem('cleanconnect.notif.pickups')
+      return p !== null ? p === 'true' : true
+    } catch {
+      return true
+    }
+  })
+  const [notifDrives, setNotifDrives] = useState(() => {
+    try {
+      const p = localStorage.getItem('cleanconnect.notif.drives')
+      return p !== null ? p === 'true' : false
+    } catch {
+      return false
+    }
+  })
   const [isTestingNeon, setIsTestingNeon] = useState(false)
 
   const handleTestNeon = async () => {
@@ -48,9 +69,16 @@ export function SettingsView({ session, onUpdateProfile, onToast }: SettingsView
       onToast('Please enter a valid name')
       return
     }
-    const updated = database.updateProfile(name, email, city)
+    const updated = database.updateProfile(name, email, city, ward)
+    try {
+      localStorage.setItem('cleanconnect.notif.reports', String(notifReports))
+      localStorage.setItem('cleanconnect.notif.pickups', String(notifPickups))
+      localStorage.setItem('cleanconnect.notif.drives', String(notifDrives))
+    } catch {
+      // ignore
+    }
     onUpdateProfile(updated.name, updated.email, updated.city)
-    onToast(`Profile updated! Signed in as ${updated.name}`)
+    onToast(`Preferences saved! Ward: ${ward}`)
   }
 
   const handleClearData = () => {

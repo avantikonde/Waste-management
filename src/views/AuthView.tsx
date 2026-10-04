@@ -106,7 +106,7 @@ export function AuthView({
         </div>
 
         <div style={{ fontSize: '12px', opacity: 0.75 }}>
-          © 2026 CleanConnect Civic Systems · City of Bengaluru
+          © 2026 CleanConnect Civic Municipal Systems · Smart Sanitation Grid
         </div>
       </div>
 

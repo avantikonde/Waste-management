@@ -28,6 +28,37 @@ const categories: { label: WasteCategory; icon: string; desc: string }[] = [
   { label: 'Hazardous waste', icon: '⚠️', desc: 'Chemicals, medical discards, batteries' },
 ]
 
+function compressImage(file: File, maxWidth = 1000, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (readerEvent) => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width)
+          width = maxWidth
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext('2d')
+        if (!ctx) {
+          resolve(String(readerEvent.target?.result || ''))
+          return
+        }
+        ctx.drawImage(img, 0, 0, width, height)
+        const compressed = canvas.toDataURL('image/jpeg', quality)
+        resolve(compressed)
+      }
+      img.onerror = () => reject(new Error('Failed to load image'))
+      img.src = String(readerEvent.target?.result || '')
+    }
+    reader.onerror = (err) => reject(err)
+    reader.readAsDataURL(file)
+  })
+}
+
 export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
   const userLoc = database.getLocation()
   const session = database.getSession()
@@ -74,22 +105,20 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
     }
   }, [onToast])
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
       onToast('Please choose an image file (JPG/PNG)')
       return
     }
-    if (file.size > 10 * 1024 * 1024) {
-      onToast('Image size must be under 10 MB')
-      return
+    try {
+      const compressed = await compressImage(file)
+      setImagePreview(compressed)
+      onToast('Photo proof attached & optimized')
+    } catch {
+      onToast('Could not process this image. Please try another.')
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setImagePreview(String(reader.result ?? ''))
-    }
-    reader.readAsDataURL(file)
   }
 
   const handleDetectLocation = () => {
