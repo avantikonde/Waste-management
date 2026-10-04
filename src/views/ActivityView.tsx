@@ -1,69 +1,73 @@
+import { useMemo } from 'react'
 import { Activity, CheckCircle2, Truck, Bell, FileText } from 'lucide-react'
 import { database } from '../database'
 import { formatRelativeTime } from '../utils/dateUtils'
 
+interface ActivityItem {
+  id: string
+  title: string
+  time: string
+  category: string
+  icon: typeof Activity
+  desc: string
+  timestamp: number
+}
+
 export function ActivityView() {
-  const reports = database.getReports()
-  const pickups = database.getPickups()
-  const notifications = database.getNotifications()
+  const items = useMemo(() => {
+    const reports = database.getReports()
+    const pickups = database.getPickups()
+    const notifications = database.getNotifications()
+    const now = Date.now()
 
-  // Synthesize dynamic activity feed from live database items
-  interface ActivityItem {
-    id: string
-    title: string
-    time: string
-    category: string
-    icon: typeof Activity
-    desc: string
-    timestamp: number
-  }
+    const list: ActivityItem[] = []
 
-  const items: ActivityItem[] = []
-
-  // Add reports activity
-  reports.slice(0, 5).forEach((r) => {
-    const ts = r.createdAt ? new Date(r.createdAt).getTime() : Date.now()
-    items.push({
-      id: `act-rep-${r.id}`,
-      title: `Civic Report ${r.id} (${r.type})`,
-      time: formatRelativeTime(r.createdAt) || 'Recent',
-      category: 'Report',
-      icon: r.status === 'Resolved' ? CheckCircle2 : FileText,
-      desc: `${r.location} · Status: ${r.status}${r.assignedDriver ? ` · Assigned to ${r.assignedDriver}` : ''}`,
-      timestamp: ts,
+    // Add reports activity
+    reports.slice(0, 5).forEach((r) => {
+      const ts = r.createdAt ? new Date(r.createdAt).getTime() : now
+      list.push({
+        id: `act-rep-${r.id}`,
+        title: `Civic Report ${r.id} (${r.type})`,
+        time: formatRelativeTime(r.createdAt) || 'Recent',
+        category: 'Report',
+        icon: r.status === 'Resolved' ? CheckCircle2 : FileText,
+        desc: `${r.location} · Status: ${r.status}${r.assignedDriver ? ` · Assigned to ${r.assignedDriver}` : ''}`,
+        timestamp: ts,
+      })
     })
-  })
 
-  // Add pickups activity
-  pickups.slice(0, 4).forEach((p) => {
-    const ts = p.createdAt ? new Date(p.createdAt).getTime() : Date.now() - 3600000
-    items.push({
-      id: `act-pick-${p.id}`,
-      title: `Doorstep Collection: ${p.id}`,
-      time: p.createdAt ? formatRelativeTime(p.createdAt) : p.date,
-      category: 'Pickup',
-      icon: Truck,
-      desc: `${p.type} (${p.quantity || '10-25 kg'}) scheduled for ${p.date} · ${p.address}`,
-      timestamp: ts,
+    // Add pickups activity
+    pickups.slice(0, 4).forEach((p) => {
+      const ts = p.createdAt ? new Date(p.createdAt).getTime() : now - 3600000
+      list.push({
+        id: `act-pick-${p.id}`,
+        title: `Doorstep Collection: ${p.id}`,
+        time: p.createdAt ? formatRelativeTime(p.createdAt) : p.date,
+        category: 'Pickup',
+        icon: Truck,
+        desc: `${p.type} (${p.quantity || '10-25 kg'}) scheduled for ${p.date} · ${p.address}`,
+        timestamp: ts,
+      })
     })
-  })
 
-  // Add system notifications
-  notifications.slice(0, 3).forEach((n) => {
-    const ts = n.createdAt ? new Date(n.createdAt).getTime() : Date.now() - 7200000
-    items.push({
-      id: `act-notif-${n.id}`,
-      title: n.title,
-      time: n.time || 'Recently',
-      category: 'System',
-      icon: Bell,
-      desc: n.message,
-      timestamp: ts,
+    // Add system notifications
+    notifications.slice(0, 3).forEach((n) => {
+      const ts = n.createdAt ? new Date(n.createdAt).getTime() : now - 7200000
+      list.push({
+        id: `act-notif-${n.id}`,
+        title: n.title,
+        time: n.time || 'Recently',
+        category: 'System',
+        icon: Bell,
+        desc: n.message,
+        timestamp: ts,
+      })
     })
-  })
 
-  // Sort descending by timestamp
-  items.sort((a, b) => b.timestamp - a.timestamp)
+    // Sort descending by timestamp
+    list.sort((a, b) => b.timestamp - a.timestamp)
+    return list
+  }, [])
 
   return (
     <div className="page-content">
