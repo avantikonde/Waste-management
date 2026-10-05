@@ -5,6 +5,7 @@ import type {
   UserSession,
   UserLocationState,
   DriverAssignment,
+  DriverProfile,
   EcoReward,
   NotificationItem,
   WardMetric,
@@ -37,6 +38,7 @@ export type {
   UserSession,
   UserLocationState,
   DriverAssignment,
+  DriverProfile,
   EcoReward,
   NotificationItem,
   WardMetric,
@@ -51,6 +53,7 @@ const keys = {
   points: 'cleanconnect.points.v2',
   notifications: 'cleanconnect.notifications.v2',
   assignments: 'cleanconnect.driver_assignments.v2',
+  driverProfile: 'cleanconnect.driver_profile.v2',
   rewards: 'cleanconnect.rewards.v2',
   location: 'cleanconnect.location.v2',
 }
@@ -265,6 +268,17 @@ export function generatePuneSeedPickups(): StoredPickup[] {
   ]
 }
 
+export const defaultDriverProfile: DriverProfile = {
+  id: 'DRV-P1',
+  name: 'Ravi Kumar',
+  phone: '+91 98220 44123',
+  vehicleNumber: 'MH 12 AB 2840',
+  vehicleType: 'Electric Tipper Truck (2.5T)',
+  zone: 'Central Ward & Swargate Sector',
+  depot: 'East Sector Yard',
+  status: 'On Duty',
+}
+
 export const defaultDriverAssignments: DriverAssignment[] = [
   {
     id: 'ASG-201',
@@ -280,6 +294,7 @@ export const defaultDriverAssignments: DriverAssignment[] = [
     driverName: 'Ravi Kumar',
     driverPhone: '+91 98220 44123',
     vehicleNumber: 'MH 12 AB 2840',
+    citizenPhone: '+91 98220 88711',
   },
   {
     id: 'ASG-202',
@@ -295,6 +310,7 @@ export const defaultDriverAssignments: DriverAssignment[] = [
     driverName: 'Ravi Kumar',
     driverPhone: '+91 98220 44123',
     vehicleNumber: 'MH 12 AB 2840',
+    citizenPhone: '+91 98220 12345',
   },
   {
     id: 'ASG-203',
@@ -310,6 +326,7 @@ export const defaultDriverAssignments: DriverAssignment[] = [
     driverName: 'Ravi Kumar',
     driverPhone: '+91 98220 44123',
     vehicleNumber: 'MH 12 AB 2840',
+    citizenPhone: '+91 98220 33419',
   },
 ]
 
@@ -526,7 +543,8 @@ export const database = {
 
   addReport(report: StoredReport): StoredReport {
     // 1. Smart Municipal Auto-Dispatch (citizen never needs to provide driver number)
-    const driver = findNearestDriver(report.lat, report.lng)
+    const activeDriver = database.getDriverProfile()
+    const driver = findNearestDriver(report.lat, report.lng, activeDriver)
     const enrichedReport: StoredReport = {
       ...report,
       status: report.status === 'Submitted' ? 'Assigned' : report.status,
@@ -564,6 +582,7 @@ export const database = {
       driverName: driver.name,
       driverPhone: driver.phone,
       vehicleNumber: driver.vehicleNumber,
+      citizenPhone: enrichedReport.reporterEmail || '+91 98220 88711',
       reportImage: enrichedReport.image,
     }
     const currentAssignments = read<DriverAssignment[]>(keys.assignments, defaultDriverAssignments)
@@ -634,23 +653,133 @@ export const database = {
   },
 
   addPickup(pickup: StoredPickup): StoredPickup {
+    // 1. Resolve coordinates & address
+    const userLoc = database.getLocation()
+    const lat = pickup.lat || userLoc.lat || 18.5204
+    const lng = pickup.lng || userLoc.lng || 73.8567
+
+    // 2. Municipal Fleet Auto-Dispatch & Nearest Driver Matching
+    const activeDriver = database.getDriverProfile()
+    const driver = findNearestDriver(lat, lng, activeDriver)
+
+    const distanceKm =
+      Math.round(
+        Math.hypot(
+          driver.lat - lat,
+          driver.lng - lng
+        ) * 111 * 10
+      ) / 10 || 2.4
+
+    const etaMinutes = pickup.etaMinutes || Math.max(12, Math.round(distanceKm * 4 + 8))
+
+    const enrichedPickup: StoredPickup = {
+      ...pickup,
+      lat,
+      lng,
+      status: 'Accepted',
+      driverName: pickup.driverName && pickup.driverName !== 'Pending assignment' ? pickup.driverName : driver.name,
+      driverPhone: pickup.driverPhone || driver.phone,
+      vehicleNumber: pickup.vehicleNumber || driver.vehicleNumber,
+      etaMinutes,
+    }
+
     const current = database.getPickups()
-    const next = [pickup, ...current]
+    const next = [enrichedPickup, ...current]
     write(keys.pickups, next)
+
+    // 3. Automatically insert scheduled pickup into Driver's Live Assignment Queue
+    const newAssignment: DriverAssignment = {
+      id: `ASG-${enrichedPickup.id}`,
+      reportId: enrichedPickup.id,
+      type: `Doorstep Pickup (${enrichedPickup.type} - ${enrichedPickup.quantity})`,
+      location: enrichedPickup.address,
+      priority: 'Medium',
+      status: 'New',
+      timeSlot: `${enrichedPickup.date} (${enrichedPickup.timeSlot})`,
+      lat,
+      lng,
+      distanceKm,
+      driverName: enrichedPickup.driverName,
+      driverPhone: enrichedPickup.driverPhone,
+      vehicleNumber: enrichedPickup.vehicleNumber,
+      citizenPhone: enrichedPickup.contact,
+    }
+    const currentAssignments = read<DriverAssignment[]>(keys.assignments, defaultDriverAssignments)
+    write(keys.assignments, [newAssignment, ...currentAssignments])
+
+    // 4. Send citizen notification with Driver name, vehicle number, and variable phone
     database.addNotification({
       id: `NOTIF-${Date.now()}`,
-      title: 'Doorstep pickup confirmed',
-      message: `Booking ${pickup.id} confirmed for ${pickup.date} (${pickup.timeSlot}).`,
+      title: '🚛 Collection Vehicle Assigned!',
+      message: `Driver ${enrichedPickup.driverName} (${enrichedPickup.vehicleNumber}) has been assigned for ${enrichedPickup.date} (${enrichedPickup.timeSlot}). Driver Phone: ${enrichedPickup.driverPhone}. ETA: ~${etaMinutes} mins.`,
       time: 'Just now',
       read: false,
       type: 'pickup',
     })
 
     if (isNeonConfigured) {
-      insertNeonPickup(pickup).catch((err) => console.warn('Neon pickup insert error:', err))
+      insertNeonPickup(enrichedPickup).catch((err) => console.warn('Neon pickup insert error:', err))
     }
 
-    return pickup
+    return enrichedPickup
+  },
+
+  // Driver Profile & Variable Contact
+  getDriverProfile(): DriverProfile {
+    return read<DriverProfile>(keys.driverProfile, defaultDriverProfile)
+  },
+
+  updateDriverProfile(updates: Partial<DriverProfile>): DriverProfile {
+    const current = database.getDriverProfile()
+    const updated: DriverProfile = { ...current, ...updates }
+    write(keys.driverProfile, updated)
+
+    // Synchronize newly updated driver contact & vehicle across active assignments
+    const currentAssignments = read<DriverAssignment[]>(keys.assignments, defaultDriverAssignments)
+    const nextAssignments = currentAssignments.map((a) => {
+      if (a.driverName?.includes(current.name) || a.driverName?.includes(updated.name)) {
+        return {
+          ...a,
+          driverName: updated.name,
+          driverPhone: updated.phone,
+          vehicleNumber: updated.vehicleNumber,
+        }
+      }
+      return a
+    })
+    write(keys.assignments, nextAssignments)
+
+    // Synchronize across active pickups
+    const currentPickups = read<StoredPickup[]>(keys.pickups, [])
+    const nextPickups = currentPickups.map((p) => {
+      if (p.driverName?.includes(current.name) || p.driverName?.includes(updated.name)) {
+        return {
+          ...p,
+          driverName: updated.name,
+          driverPhone: updated.phone,
+          vehicleNumber: updated.vehicleNumber,
+        }
+      }
+      return p
+    })
+    write(keys.pickups, nextPickups)
+
+    // Synchronize across active reports
+    const currentReports = read<StoredReport[]>(keys.reports, [])
+    const nextReports = currentReports.map((r) => {
+      if (r.assignedDriver?.includes(current.name) || r.assignedDriver?.includes(updated.name)) {
+        return {
+          ...r,
+          assignedDriver: updated.name,
+          driverPhone: updated.phone,
+          vehicleNumber: updated.vehicleNumber,
+        }
+      }
+      return r
+    })
+    write(keys.reports, nextReports)
+
+    return updated
   },
 
   // Driver Assignments

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import type { WasteCategory, ReportPriority, StoredReport } from '../types'
 import { database } from '../database'
-import { reverseGeocode, getGoogleMapsUrl } from '../utils/geoUtils'
+import { reverseGeocode, getGoogleMapsUrl, getHighAccuracyPosition } from '../utils/geoUtils'
 
 interface ReportModalProps {
   onClose: () => void
@@ -66,40 +66,38 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
   const [category, setCategory] = useState<WasteCategory>('Mixed waste')
   const [priority, setPriority] = useState<ReportPriority>('Medium')
   const [imagePreview, setImagePreview] = useState('')
-  const [locationName, setLocationName] = useState(userLoc.area ? `${userLoc.area}, ${userLoc.city}` : 'FC Road, Pune')
+  const [locationName, setLocationName] = useState(
+    userLoc.area ? `${userLoc.area}, ${userLoc.city}` : userLoc.city || 'Acquiring GPS...'
+  )
   const [coordinates, setCoordinates] = useState({ lat: userLoc.lat, lng: userLoc.lng })
   const [description, setDescription] = useState('')
   const [isLocating, setIsLocating] = useState(() => typeof navigator !== 'undefined' && 'geolocation' in navigator)
 
-  // Try auto-detecting current live location on open
+  // Auto-detect current live GPS on open
   useEffect(() => {
     let active = true
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          if (!active) return
-          setIsLocating(false)
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          setCoordinates({ lat, lng })
-          const geo = await reverseGeocode(lat, lng)
-          if (!active) return
-          setLocationName(`${geo.area}, ${geo.city}`)
-          database.setLocation({
-            city: geo.city,
-            area: geo.area,
-            lat,
-            lng,
-            isLiveGps: true,
-          })
-          onToast(`Current location detected: ${geo.city} (${geo.area})`)
-        },
-        () => {
-          if (active) setIsLocating(false)
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      )
-    }
+
+    getHighAccuracyPosition()
+      .then(async (fix) => {
+        if (!active) return
+        setIsLocating(false)
+        setCoordinates({ lat: fix.lat, lng: fix.lng })
+        const geo = await reverseGeocode(fix.lat, fix.lng)
+        if (!active) return
+        setLocationName(`${geo.area}, ${geo.city}`)
+        database.setLocation({
+          city: geo.city,
+          area: geo.area,
+          lat: fix.lat,
+          lng: fix.lng,
+          isLiveGps: true,
+        })
+        onToast(`📍 Current location detected: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
+      })
+      .catch(() => {
+        if (active) setIsLocating(false)
+      })
+
     return () => {
       active = false
     }
@@ -121,35 +119,26 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
     }
   }
 
-  const handleDetectLocation = () => {
+  const handleDetectLocation = async () => {
     setIsLocating(true)
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          setIsLocating(false)
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          setCoordinates({ lat, lng })
-          const geo = await reverseGeocode(lat, lng)
-          setLocationName(`${geo.area}, ${geo.city}`)
-          database.setLocation({
-            city: geo.city,
-            area: geo.area,
-            lat,
-            lng,
-            isLiveGps: true,
-          })
-          onToast(`📍 Real-time GPS coordinates detected: ${geo.area}, ${geo.city}`)
-        },
-        (err) => {
-          setIsLocating(false)
-          onToast(`Could not acquire GPS: ${err.message}. You can manually type the address.`)
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      )
-    } else {
+    try {
+      const fix = await getHighAccuracyPosition()
+      setCoordinates({ lat: fix.lat, lng: fix.lng })
+      const geo = await reverseGeocode(fix.lat, fix.lng)
+      setLocationName(`${geo.area}, ${geo.city}`)
+      database.setLocation({
+        city: geo.city,
+        area: geo.area,
+        lat: fix.lat,
+        lng: fix.lng,
+        isLiveGps: true,
+      })
+      onToast(`📍 Real-time GPS fix: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      onToast(`Could not acquire GPS: ${message}. You can manually type the address.`)
+    } finally {
       setIsLocating(false)
-      onToast('Geolocation not available in browser')
     }
   }
 

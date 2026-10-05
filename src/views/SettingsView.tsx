@@ -153,10 +153,17 @@ export function SettingsView({ session, onUpdateProfile, onToast }: SettingsView
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
               >
+                {!['Pune', 'Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai', 'Kolkata', 'Ahmedabad'].some(
+                  (c) => c.toLowerCase() === city.toLowerCase()
+                ) && <option value={city}>{city}</option>}
                 <option value="Pune">Pune, Maharashtra</option>
-                <option value="Bengaluru">Bengaluru, Karnataka</option>
                 <option value="Mumbai">Mumbai, Maharashtra</option>
-                <option value="Delhi">Delhi NCR</option>
+                <option value="Bengaluru">Bengaluru, Karnataka</option>
+                <option value="Delhi NCR">Delhi NCR</option>
+                <option value="Hyderabad">Hyderabad, Telangana</option>
+                <option value="Chennai">Chennai, Tamil Nadu</option>
+                <option value="Kolkata">Kolkata, West Bengal</option>
+                <option value="Ahmedabad">Ahmedabad, Gujarat</option>
               </select>
             </label>
 

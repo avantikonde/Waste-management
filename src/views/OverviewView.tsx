@@ -10,6 +10,7 @@ import {
   MapPin,
   ChevronRight,
   TrendingUp,
+  Phone,
 } from 'lucide-react'
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import type { StoredReport, StoredPickup } from '../types'
@@ -157,7 +158,7 @@ export function OverviewView({
             <span className="stat-label">Green Points</span>
             <strong className="stat-value">{greenPoints.toLocaleString()}</strong>
             <span className="stat-trend" style={{ color: 'var(--purple)' }}>
-              Top 12% in {userLoc.area || userLoc.city || 'Pune'}
+              Top 12% in {userLoc.area || userLoc.city || 'your zone'}
             </span>
           </div>
         </div>
@@ -226,7 +227,7 @@ export function OverviewView({
                     <Popup>
                       <div className="popup-card">
                         <strong>{report.type || 'Waste Report'}</strong>
-                        <p>{report.location || 'Pune'}</p>
+                        <p>{report.location || userLoc.city}</p>
                         <span className={`status-pill ${reportStatus.toLowerCase().replace(/\s+/g, '-')}`}>
                           {reportStatus}
                         </span>
@@ -297,7 +298,7 @@ export function OverviewView({
                       <strong>{report.type || 'Waste report'}</strong>
                     </div>
                     <div className="report-location-sub">
-                      <MapPin size={12} /> {report.location || 'Pune'}
+                      <MapPin size={12} /> {report.location || userLoc.city}
                     </div>
                   </div>
                   <span className={`status-pill ${statusClass}`}>
@@ -337,17 +338,20 @@ export function OverviewView({
             </div>
 
             <div className="tracker-details">
-              <strong>{activePickup?.type || 'Society Waste Collection'}</strong>
-              <p>{activePickup?.address || `${userLoc.area || 'FC Road'}, ${userLoc.city || 'Pune'}`}</p>
+              <strong>{activePickup?.type || 'Doorstep Waste Collection'}</strong>
+              <p>{activePickup?.address || (userLoc.area ? `${userLoc.area}, ${userLoc.city}` : userLoc.city)}</p>
               <div className="tracker-meta-chips">
                 <span className="tracker-chip">
-                  <Truck size={13} /> {activePickup?.vehicleNumber || 'MH 12 AB 2840'}
+                  <Truck size={13} /> {activePickup?.vehicleNumber || database.getDriverProfile().vehicleNumber}
                 </span>
                 <span className="tracker-chip">
                   <Clock3 size={13} /> ETA: {activePickup?.etaMinutes || 12} mins
                 </span>
                 <span className="tracker-chip">
-                  Driver: {activePickup?.driverName || 'Ravi K.'}
+                  Driver: {activePickup?.driverName || database.getDriverProfile().name}
+                </span>
+                <span className="tracker-chip">
+                  <Phone size={13} /> {activePickup?.driverPhone || database.getDriverProfile().phone}
                 </span>
               </div>
             </div>

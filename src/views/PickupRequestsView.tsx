@@ -134,11 +134,14 @@ export function PickupRequestsView({
 
               <div>
                 <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', display: 'block' }}>
-                  Collection Vehicle
+                  Assigned Driver & Vehicle
                 </span>
                 <strong style={{ fontSize: '13.5px', color: 'var(--primary)' }}>
-                  {activePickup.vehicleNumber || 'MH 12 AB 2840'} (ETA 12 min)
+                  {activePickup.driverName || database.getDriverProfile().name} · {activePickup.vehicleNumber || database.getDriverProfile().vehicleNumber}
                 </strong>
+                <small style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '11px', marginTop: '2px' }}>
+                  Direct Phone: {activePickup.driverPhone || database.getDriverProfile().phone}
+                </small>
               </div>
 
               <div style={{ gridColumn: 'span 2' }}>
@@ -172,12 +175,12 @@ export function PickupRequestsView({
 
             <div style={{ display: 'flex', gap: '10px' }}>
               <a
-                href={`tel:${activePickup.contact || '+91 98220 44123'}`}
+                href={`tel:${activePickup.driverPhone || database.getDriverProfile().phone}`}
                 className="outline-btn"
                 style={{ flex: 1, textDecoration: 'none', justifyContent: 'center' }}
-                onClick={() => onToast(`Calling driver ${activePickup.driverName || 'Ravi K.'} (${activePickup.contact || '+91 98220 44123'})...`)}
+                onClick={() => onToast(`Calling municipal driver ${activePickup.driverName || database.getDriverProfile().name} (${activePickup.driverPhone || database.getDriverProfile().phone})...`)}
               >
-                <Phone size={14} /> Call Driver
+                <Phone size={14} /> Call Driver ({activePickup.driverPhone || database.getDriverProfile().phone})
               </a>
               <button
                 type="button"

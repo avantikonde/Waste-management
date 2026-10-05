@@ -24,6 +24,7 @@ import {
   getGoogleMapsUrl,
   getGoogleMapsDirectionsUrl,
   reverseGeocode,
+  getHighAccuracyPosition,
 } from '../utils/geoUtils'
 import { formatRelativeTime } from '../utils/dateUtils'
 
@@ -65,35 +66,27 @@ export function NearbyWasteView({
   })
 
   // Detect user's live GPS
-  const handleDetectLiveGps = () => {
-    if (!('geolocation' in navigator)) {
-      onToast('Geolocation is not supported by your browser')
-      return
-    }
+  const handleDetectLiveGps = async () => {
     setIsLocating(true)
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        setIsLocating(false)
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
-        const geo = await reverseGeocode(lat, lng)
-        const nextLoc: UserLocationState = {
-          city: geo.city,
-          area: geo.area,
-          lat,
-          lng,
-          isLiveGps: true,
-        }
-        database.setLocation(nextLoc)
-        setUserLoc(nextLoc)
-        onToast(`Live GPS located: ${geo.area}, ${geo.city}!`)
-      },
-      (err) => {
-        setIsLocating(false)
-        onToast(`Could not access live GPS: ${err.message}`)
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    )
+    try {
+      const fix = await getHighAccuracyPosition()
+      const geo = await reverseGeocode(fix.lat, fix.lng)
+      const nextLoc: UserLocationState = {
+        city: geo.city,
+        area: geo.area,
+        lat: fix.lat,
+        lng: fix.lng,
+        isLiveGps: true,
+      }
+      database.setLocation(nextLoc)
+      setUserLoc(nextLoc)
+      onToast(`📍 Live GPS located: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      onToast(`Could not access live GPS: ${message}`)
+    } finally {
+      setIsLocating(false)
+    }
   }
 
   // Switch City
@@ -166,20 +159,29 @@ export function NearbyWasteView({
             className="select-filter"
             style={{ padding: '6px 12px', fontSize: '12.5px', fontWeight: 600 }}
             value={
-              userLoc.city.toLowerCase().includes('mumbai')
-                ? 'mumbai'
-                : userLoc.city.toLowerCase().includes('delhi')
-                  ? 'delhi'
-                  : userLoc.city.toLowerCase().includes('bengaluru')
-                    ? 'bengaluru'
-                    : 'pune'
+              SUPPORTED_CITIES.find(
+                (c) => c.name.toLowerCase() === userLoc.city.toLowerCase() || userLoc.city.toLowerCase().includes(c.id)
+              )?.id || (userLoc.isLiveGps ? 'live' : 'custom')
             }
-            onChange={(e) => handleCitySelect(e.target.value)}
+            onChange={(e) => {
+              if (e.target.value === 'live') {
+                handleDetectLiveGps()
+              } else if (e.target.value !== 'custom') {
+                handleCitySelect(e.target.value)
+              }
+            }}
           >
-            <option value="pune">Pune (Current Area)</option>
-            <option value="bengaluru">Bengaluru</option>
-            <option value="mumbai">Mumbai</option>
-            <option value="delhi">Delhi NCR</option>
+            {userLoc.isLiveGps && (
+              <option value="live">📍 {userLoc.area || userLoc.city} (Live GPS)</option>
+            )}
+            {!userLoc.isLiveGps && !SUPPORTED_CITIES.some((c) => c.name.toLowerCase() === userLoc.city.toLowerCase()) && (
+              <option value="custom">📍 {userLoc.area || userLoc.city} (Current)</option>
+            )}
+            {SUPPORTED_CITIES.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </select>
         </div>
 

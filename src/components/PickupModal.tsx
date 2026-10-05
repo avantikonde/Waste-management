@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Truck, X, ArrowRight, Calendar, Clock, MapPin, Phone } from 'lucide-react'
+import { Truck, X, ArrowRight, Calendar, Clock, MapPin, Phone, Navigation } from 'lucide-react'
 import type { StoredPickup } from '../types'
 import { database } from '../database'
+import { getHighAccuracyPosition, reverseGeocode } from '../utils/geoUtils'
 
 interface PickupModalProps {
   onClose: () => void
@@ -15,8 +16,10 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
   const [date, setDate] = useState(() => new Date(Date.now() + 86400000).toISOString().split('T')[0])
   const [timeSlot, setTimeSlot] = useState('08:00 – 10:00 AM')
   const [address, setAddress] = useState(() =>
-    userLoc.area ? `${userLoc.area}, ${userLoc.city}` : `${userLoc.city || 'Pune'}`
+    userLoc.area ? `${userLoc.area}, ${userLoc.city}` : userLoc.city || ''
   )
+  const [coordinates, setCoordinates] = useState({ lat: userLoc.lat, lng: userLoc.lng })
+  const [isLocating, setIsLocating] = useState(false)
   const [contact, setContact] = useState('')
   const [instructions, setInstructions] = useState('')
 
@@ -34,6 +37,27 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
     { label: '> 50 kg', desc: 'Society dumpster / truckload' },
   ]
 
+  const handleDetectLiveLocation = async () => {
+    setIsLocating(true)
+    try {
+      const fix = await getHighAccuracyPosition()
+      setCoordinates({ lat: fix.lat, lng: fix.lng })
+      const geo = await reverseGeocode(fix.lat, fix.lng)
+      setAddress(`${geo.area}, ${geo.city}`)
+      database.setLocation({
+        city: geo.city,
+        area: geo.area,
+        lat: fix.lat,
+        lng: fix.lng,
+        isLiveGps: true,
+      })
+    } catch {
+      // Keep existing address
+    } finally {
+      setIsLocating(false)
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const id = `PK-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
@@ -48,7 +72,8 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
       timeSlot,
       quantity,
       instructions,
-      driverName: 'Pending assignment',
+      lat: coordinates.lat,
+      lng: coordinates.lng,
       createdAt: new Date().toISOString(),
     }
 
@@ -148,11 +173,23 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
             </label>
           </div>
 
-          {/* Address */}
+          {/* Address with Live GPS Button */}
           <label className="form-label">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPin size={13} /> Collection Address
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <MapPin size={13} /> Collection Address & Coordinates
+              </span>
+              <button
+                type="button"
+                className="outline-btn"
+                style={{ padding: '3px 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                onClick={handleDetectLiveLocation}
+                disabled={isLocating}
+                title="Detect live GPS coordinates at this location"
+              >
+                <Navigation size={11} /> {isLocating ? 'Locating...' : 'Use Live GPS'}
+              </button>
+            </div>
             <input
               type="text"
               className="form-input"
@@ -161,12 +198,15 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
               placeholder="House/Flat No., Building Name, Street..."
               required
             />
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+              GPS: {coordinates.lat.toFixed(4)}° N, {coordinates.lng.toFixed(4)}° E (Auto-assigns nearest municipal crew)
+            </small>
           </label>
 
-          {/* Contact Phone */}
+          {/* Citizen Contact Phone */}
           <label className="form-label">
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Phone size={13} /> Contact Phone
+              <Phone size={13} /> Your Contact Phone Number
             </span>
             <input
               type="tel"
@@ -177,6 +217,9 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
               pattern="[0-9+() -]{7,}"
               required
             />
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+              The assigned municipal driver will call this number when arriving at your gate.
+            </small>
           </label>
 
           {/* Gate Instructions */}

@@ -58,7 +58,7 @@ export function RewardsModal({
               Level 4 Civic Steward
             </span>
             <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600 }}>
-              Top 12% in {database.getLocation().area || database.getLocation().city || 'Pune'}
+              Top 12% in {database.getLocation().area || database.getLocation().city || 'your zone'}
             </span>
           </div>
         </div>

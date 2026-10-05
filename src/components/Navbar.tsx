@@ -23,6 +23,7 @@ interface NavbarProps {
   notifications: NotificationItem[]
   userLoc?: UserLocationState
   onRefreshGps?: () => void
+  onOpenLocationPicker?: () => void
   onToggleTheme: () => void
   onChangeRole: (role: 'Citizen' | 'Driver' | 'Admin') => void
   onToggleMobileMenu: () => void
@@ -39,6 +40,7 @@ export function Navbar({
   notifications,
   userLoc,
   onRefreshGps,
+  onOpenLocationPicker,
   onToggleTheme,
   onChangeRole,
   onToggleMobileMenu,
@@ -124,11 +126,11 @@ export function Navbar({
           </div>
         )}
 
-        {/* Live GPS Tracking Badge */}
-        {onRefreshGps && (
+        {/* Live GPS Tracking Badge & Location Picker Trigger */}
+        {(onOpenLocationPicker || onRefreshGps) && (
           <button
             type="button"
-            onClick={onRefreshGps}
+            onClick={onOpenLocationPicker || onRefreshGps}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -142,7 +144,7 @@ export function Navbar({
               color: userLoc?.isLiveGps ? 'var(--sky)' : 'var(--text-secondary)',
               cursor: 'pointer',
             }}
-            title={userLoc?.isLiveGps ? 'Live GPS Active! Click to re-acquire coordinates' : 'Click to acquire your live GPS position'}
+            title={userLoc?.isLiveGps ? 'Live GPS Active! Click to inspect satellite fix or change location' : 'Click to acquire your live GPS position or search location'}
           >
             <span
               style={{
@@ -154,7 +156,7 @@ export function Navbar({
               }}
             />
             <MapPin size={13} />
-            <span>{userLoc?.isLiveGps ? `${userLoc.area || userLoc.city} (Live GPS)` : `${userLoc?.city || 'Pune'} (Locate Me)`}</span>
+            <span>{userLoc?.isLiveGps ? `${userLoc.area || userLoc.city} (Live GPS)` : `${userLoc?.city || 'Locate Me'}`}</span>
           </button>
         )}
 

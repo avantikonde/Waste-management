@@ -49,10 +49,22 @@ export interface StoredPickup {
   instructions?: string
   vehicleNumber?: string
   driverName?: string
+  driverPhone?: string
   etaMinutes?: number
   lat?: number
   lng?: number
   createdAt: string
+}
+
+export interface DriverProfile {
+  id: string
+  name: string
+  phone: string
+  vehicleNumber: string
+  vehicleType: string
+  zone: string
+  depot: string
+  status: 'On Duty' | 'Available' | 'Off Duty'
 }
 
 export interface StoredUser {
@@ -98,6 +110,7 @@ export interface DriverAssignment {
   driverPhone?: string
   vehicleNumber?: string
   reportImage?: string
+  citizenPhone?: string
 }
 
 export interface EcoReward {

@@ -9,7 +9,7 @@ import type {
   UserLocationState,
 } from './types'
 import { database, subscribeToDatabase } from './database'
-import { reverseGeocode } from './utils/geoUtils'
+import { reverseGeocode, getHighAccuracyPosition } from './utils/geoUtils'
 import './App.css'
 
 // Modular Components
@@ -19,6 +19,7 @@ import { ReportModal } from './components/ReportModal'
 import { PickupModal } from './components/PickupModal'
 import { ReportDetailsModal } from './components/ReportDetailsModal'
 import { RewardsModal } from './components/RewardsModal'
+import { LocationPickerModal } from './components/LocationPickerModal'
 
 // Workspace Views
 import { OverviewView } from './views/OverviewView'
@@ -54,6 +55,7 @@ export default function App() {
     database.getNotifications()
   )
   const [userLoc, setUserLoc] = useState<UserLocationState>(() => database.getLocation())
+  const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
 
   const showToast = (message: string) => {
     setToast(message)
@@ -62,51 +64,46 @@ export default function App() {
     }, 3600)
   }
 
-  // Automatic Live GPS Tracker on mount & watch
+  // High-precision live GPS Tracker on mount & watch
   useEffect(() => {
+    let mounted = true
+
+    getHighAccuracyPosition()
+      .then(async (fix) => {
+        if (!mounted) return
+        const geo = await reverseGeocode(fix.lat, fix.lng)
+        const liveLoc: UserLocationState = {
+          city: geo.city,
+          area: geo.area,
+          lat: fix.lat,
+          lng: fix.lng,
+          isLiveGps: true,
+        }
+        database.setLocation(liveLoc)
+        setUserLoc(liveLoc)
+        showToast(`📍 Live Location Active: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
+      })
+      .catch((err) => {
+        console.log('Location acquisition info:', err)
+      })
+
+    // Continuous watch if available
+    let watchId: number | null = null
     if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
+      watchId = navigator.geolocation.watchPosition(
         async (pos) => {
           const lat = pos.coords.latitude
           const lng = pos.coords.longitude
-          try {
+          const cur = database.getLocation()
+          if (Math.hypot(cur.lat - lat, cur.lng - lng) > 0.0003) {
             const geo = await reverseGeocode(lat, lng)
-            const liveLoc: UserLocationState = {
+            const updated: UserLocationState = {
               city: geo.city,
               area: geo.area,
               lat,
               lng,
               isLiveGps: true,
             }
-            database.setLocation(liveLoc)
-            setUserLoc(liveLoc)
-            showToast(`📍 Live Location Active: ${geo.area}, ${geo.city}`)
-          } catch {
-            const liveLoc: UserLocationState = {
-              city: 'Current Location',
-              area: `${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E`,
-              lat,
-              lng,
-              isLiveGps: true,
-            }
-            database.setLocation(liveLoc)
-            setUserLoc(liveLoc)
-          }
-        },
-        (err) => {
-          console.log('Live geolocation note:', err.message)
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-      )
-
-      // Continuous tracking
-      const watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          const cur = database.getLocation()
-          if (Math.hypot(cur.lat - lat, cur.lng - lng) > 0.0002) {
-            const updated: UserLocationState = { ...cur, lat, lng, isLiveGps: true }
             database.setLocation(updated)
             setUserLoc(updated)
           }
@@ -114,39 +111,34 @@ export default function App() {
         null,
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
       )
+    }
 
-      return () => {
+    return () => {
+      mounted = false
+      if (watchId !== null && 'geolocation' in navigator) {
         navigator.geolocation.clearWatch(watchId)
       }
     }
   }, [])
 
-  const handleRefreshGps = () => {
-    if ('geolocation' in navigator) {
-      showToast('🛰️ Acquiring live GPS satellite fix...')
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude
-          const lng = pos.coords.longitude
-          const geo = await reverseGeocode(lat, lng)
-          const liveLoc: UserLocationState = {
-            city: geo.city,
-            area: geo.area,
-            lat,
-            lng,
-            isLiveGps: true,
-          }
-          database.setLocation(liveLoc)
-          setUserLoc(liveLoc)
-          showToast(`📍 Live GPS confirmed: ${geo.area}, ${geo.city}`)
-        },
-        (err) => {
-          showToast(`Could not acquire GPS: ${err.message}`)
-        },
-        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-      )
-    } else {
-      showToast('Geolocation is not supported by your browser')
+  const handleRefreshGps = async () => {
+    showToast('🛰️ Acquiring high-precision GPS satellite fix...')
+    try {
+      const fix = await getHighAccuracyPosition()
+      const geo = await reverseGeocode(fix.lat, fix.lng)
+      const liveLoc: UserLocationState = {
+        city: geo.city,
+        area: geo.area,
+        lat: fix.lat,
+        lng: fix.lng,
+        isLiveGps: true,
+      }
+      database.setLocation(liveLoc)
+      setUserLoc(liveLoc)
+      showToast(`📍 Live GPS confirmed: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      showToast(`Could not acquire GPS: ${message}`)
     }
   }
 
@@ -457,6 +449,7 @@ export default function App() {
           notifications={notifications}
           userLoc={userLoc}
           onRefreshGps={handleRefreshGps}
+          onOpenLocationPicker={() => setShowLocationPickerModal(true)}
           onToggleTheme={toggleTheme}
           onChangeRole={handleRoleChange}
           onToggleMobileMenu={() => setMobileOpen((curr) => !curr)}
@@ -468,6 +461,18 @@ export default function App() {
         {/* Dynamic Workspace View */}
         {renderActiveView()}
       </main>
+
+      {/* Location Picker Dialog */}
+      {showLocationPickerModal && (
+        <LocationPickerModal
+          onClose={() => setShowLocationPickerModal(false)}
+          onSelectLocation={(loc) => {
+            setUserLoc(loc)
+            database.setLocation(loc)
+          }}
+          onToast={showToast}
+        />
+      )}
 
       {/* Dialog Modals */}
       {modal === 'report' && (
