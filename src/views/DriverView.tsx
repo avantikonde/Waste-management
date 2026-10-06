@@ -17,6 +17,7 @@ import {
 import type { DriverAssignment, DriverProfile } from '../types'
 import { database } from '../database'
 import { getGoogleMapsDirectionsUrl } from '../utils/geoUtils'
+import { getTimeOfDayGreeting } from '../utils/dateUtils'
 
 interface DriverViewProps {
   onToast: (msg: string) => void
@@ -82,7 +83,7 @@ export function DriverView({ onToast }: DriverViewProps) {
           </div>
           <h1>Driver & Collection Crew Command</h1>
           <p className="page-subtitle">
-            Welcome back, Driver {driverProfile.name}. Your next optimized stop is <strong>1.4 km away</strong>.
+            {getTimeOfDayGreeting()}, Driver {driverProfile.name}. Your next optimized stop is <strong>1.4 km away</strong>.
           </p>
         </div>
 

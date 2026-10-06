@@ -12,6 +12,24 @@ export function getFormattedToday(): string {
   })
 }
 
+/**
+ * Returns a contextual time-of-day greeting (Good morning / Good afternoon / Good evening)
+ * based on the user's current local clock:
+ * - 05:00 to 11:59: "Good morning"
+ * - 12:00 to 16:59: "Good afternoon"
+ * - 17:00 to 04:59: "Good evening"
+ */
+export function getTimeOfDayGreeting(date = new Date()): string {
+  const hours = date.getHours()
+  if (hours >= 5 && hours < 12) {
+    return 'Good morning'
+  }
+  if (hours >= 12 && hours < 17) {
+    return 'Good afternoon'
+  }
+  return 'Good evening'
+}
+
 export function getCurrentMonthName(): string {
   return new Date().toLocaleDateString('en-US', { month: 'long' })
 }

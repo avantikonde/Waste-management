@@ -15,7 +15,7 @@ import {
 import { MapContainer, TileLayer, CircleMarker, Popup } from 'react-leaflet'
 import type { StoredReport, StoredPickup } from '../types'
 import { database } from '../database'
-import { getFormattedToday, formatRelativeTime } from '../utils/dateUtils'
+import { getFormattedToday, formatRelativeTime, getTimeOfDayGreeting } from '../utils/dateUtils'
 
 interface OverviewViewProps {
   userName: string
@@ -66,7 +66,7 @@ export function OverviewView({
             </span>
           </div>
           <h1>
-            Good morning, {userName ? userName.split(' ')[0] : 'Citizen'} <span>👋</span>
+            {getTimeOfDayGreeting()}, {userName ? userName.split(' ')[0] : 'Citizen'} <span>👋</span>
           </h1>
           <p className="page-subtitle">
             Together, your neighborhood in <strong>{userLoc.city}</strong> has diverted <strong>28% more waste</strong> this month.
