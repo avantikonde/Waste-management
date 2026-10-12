@@ -1040,12 +1040,30 @@ export const database = {
       driverName,
       driverPhone: phone,
       vehicleNumber,
+      citizenPhone: report?.citizenPhone || report?.reporterPhone || '+91 98220 88711',
       reportImage: report?.image,
     }
 
     const assignments = [newAssignment, ...database.getDriverAssignments()]
     write(keys.assignments, assignments)
     return assignments
+  },
+
+  reassignPickup(pickupId: string, driverName: string, vehicleNumber: string, driverPhone?: string): StoredPickup[] {
+    const current = database.getPickups()
+    const next = current.map((p) =>
+      p.id === pickupId
+        ? {
+            ...p,
+            driverName,
+            vehicleNumber,
+            driverPhone: driverPhone || p.driverPhone,
+            status: p.status === 'Requested' ? 'Accepted' : p.status,
+          }
+        : p
+    )
+    write(keys.pickups, next)
+    return next
   },
 
   // Green Points

@@ -66,7 +66,8 @@ export function Sidebar({
   const adminNav: NavItem[] = [
     { label: 'Admin Command', icon: ShieldCheck },
     { label: 'All Citizen Reports', icon: FileCheck2, count: reportCount },
-    { label: 'Fleet & Dispatch', icon: Truck },
+    { label: 'Doorstep Pickups', icon: Truck, count: pickupCount },
+    { label: 'Fleet & Dispatch', icon: Map },
     { label: 'Ward Analytics', icon: Activity },
   ]
 

@@ -329,6 +329,15 @@ export default function App() {
               onToast={showToast}
             />
           )
+        case 'Doorstep Pickups':
+          return (
+            <PickupRequestsView
+              pickups={pickups}
+              onOpenPickupModal={() => setModal('pickup')}
+              onNavigate={setActiveNav}
+              onToast={showToast}
+            />
+          )
         case 'Fleet & Dispatch':
           return (
             <NearbyWasteView
@@ -343,7 +352,10 @@ export default function App() {
           return (
             <AdminView
               reports={reports}
+              pickups={pickups}
               onRefreshReports={() => setReports(database.getReports())}
+              onRefreshPickups={() => setPickups(database.getPickups())}
+              onSelectReport={setSelectedReport}
               onToast={showToast}
             />
           )
