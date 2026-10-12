@@ -53,6 +53,7 @@ export interface StoredPickup {
   etaMinutes?: number
   lat?: number
   lng?: number
+  availabilitySlotId?: string
   createdAt: string
 }
 
@@ -65,6 +66,23 @@ export interface DriverProfile {
   zone: string
   depot: string
   status: 'On Duty' | 'Available' | 'Off Duty'
+}
+
+export interface DriverAvailabilitySlot {
+  id: string
+  driverId: string
+  driverName: string
+  driverPhone: string
+  vehicleNumber: string
+  vehicleType: string
+  date: string
+  timeSlot: string
+  location: string
+  lat: number
+  lng: number
+  isBooked: boolean
+  bookedByPickupId?: string
+  createdAt?: string
 }
 
 export interface StoredUser {

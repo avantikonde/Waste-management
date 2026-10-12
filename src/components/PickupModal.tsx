@@ -9,6 +9,10 @@ interface PickupModalProps {
   onSubmit: (pickup: StoredPickup) => void
 }
 
+function generatePickupId(): string {
+  return `PK-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+}
+
 export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
   const userLoc = database.getLocation()
   const [pickupType, setPickupType] = useState('Household waste')
@@ -22,6 +26,7 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
   const [isLocating, setIsLocating] = useState(false)
   const [contact, setContact] = useState('')
   const [instructions, setInstructions] = useState('')
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
 
   const timeSlots = [
     '08:00 – 10:00 AM',
@@ -36,6 +41,14 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
     { label: '25–50 kg', desc: 'Apartment bulk / large bins' },
     { label: '> 50 kg', desc: 'Society dumpster / truckload' },
   ]
+
+  const availableSlots = database.getAvailableDriversForSlot(
+    date,
+    timeSlot,
+    coordinates.lat,
+    coordinates.lng,
+    address
+  )
 
   const handleDetectLiveLocation = async () => {
     setIsLocating(true)
@@ -60,7 +73,8 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const id = `PK-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    const id = generatePickupId()
+    const activeSlotId = selectedSlotId || (availableSlots.length > 0 ? availableSlots[0].id : undefined)
 
     const newPickup: StoredPickup = {
       id,
@@ -74,6 +88,7 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
       instructions,
       lat: coordinates.lat,
       lng: coordinates.lng,
+      availabilitySlotId: activeSlotId,
       createdAt: new Date().toISOString(),
     }
 
@@ -171,6 +186,97 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
                 ))}
               </select>
             </label>
+          </div>
+
+          {/* Driver Selection & Shift Availability */}
+          <div className="form-label">
+            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Truck size={13} color="var(--primary)" /> Available Driver for this Shift & Ward
+              </span>
+              <span style={{ fontSize: '11px', color: availableSlots.length > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                {availableSlots.length > 0 ? `🟢 ${availableSlots.length} Driver(s) Declared Free` : 'Auto-dispatch mode'}
+              </span>
+            </span>
+
+            {availableSlots.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                {availableSlots.map((slot) => {
+                  const isSelected = (selectedSlotId || availableSlots[0].id) === slot.id
+                  return (
+                    <div
+                      key={slot.id}
+                      onClick={() => setSelectedSlotId(slot.id)}
+                      style={{
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-sm)',
+                        border: `1.5px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                        backgroundColor: isSelected ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-subtle)',
+                        cursor: 'pointer',
+                        transition: 'all var(--transition-fast)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '10px',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                            {slot.driverName}
+                          </strong>
+                          <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: 'var(--radius-full)', backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                            {slot.vehicleNumber} ({slot.vehicleType})
+                          </span>
+                        </div>
+                        <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'block', marginTop: '2px' }}>
+                          Operating Area: {slot.location} · Shift: {slot.timeSlot}
+                        </small>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <a
+                          href={`tel:${slot.driverPhone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="outline-btn"
+                          style={{ padding: '4px 8px', fontSize: '11.5px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          title="Call driver directly"
+                        >
+                          <Phone size={12} color="var(--primary)" /> {slot.driverPhone}
+                        </a>
+                        <div
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            border: `2px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                            backgroundColor: isSelected ? 'var(--primary)' : 'transparent',
+                            display: 'grid',
+                            placeItems: 'center',
+                          }}
+                        >
+                          {isSelected && <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#fff' }} />}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: 'var(--bg-subtle)',
+                  border: '1px dashed var(--border)',
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                  marginTop: '4px',
+                }}
+              >
+                No specific driver pre-declared free hours for this slot. Central municipal dispatch will automatically route the nearest on-duty crew upon booking.
+              </div>
+            )}
           </div>
 
           {/* Address with Live GPS Button */}

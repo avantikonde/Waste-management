@@ -6,6 +6,7 @@ import type {
   UserLocationState,
   DriverAssignment,
   DriverProfile,
+  DriverAvailabilitySlot,
   EcoReward,
   NotificationItem,
   WardMetric,
@@ -39,6 +40,7 @@ export type {
   UserLocationState,
   DriverAssignment,
   DriverProfile,
+  DriverAvailabilitySlot,
   EcoReward,
   NotificationItem,
   WardMetric,
@@ -54,6 +56,7 @@ const keys = {
   notifications: 'cleanconnect.notifications.v2',
   assignments: 'cleanconnect.driver_assignments.v2',
   driverProfile: 'cleanconnect.driver_profile.v2',
+  driverAvailability: 'cleanconnect.driver_availability.v2',
   rewards: 'cleanconnect.rewards.v2',
   location: 'cleanconnect.location.v2',
 }
@@ -277,6 +280,71 @@ export const defaultDriverProfile: DriverProfile = {
   zone: 'Central Ward & Swargate Sector',
   depot: 'East Sector Yard',
   status: 'On Duty',
+}
+
+export function generateSeedDriverAvailability(): DriverAvailabilitySlot[] {
+  const today = new Date().toISOString().split('T')[0]
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+  const dayAfter = new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0]
+
+  return [
+    {
+      id: 'SLOT-DRV-01',
+      driverId: 'DRV-P1',
+      driverName: 'Ravi Kumar',
+      driverPhone: '+91 98220 44123',
+      vehicleNumber: 'MH 12 AB 2840',
+      vehicleType: 'Electric Tipper Truck (2.5T)',
+      date: today,
+      timeSlot: '02:00 – 04:00 PM',
+      location: 'FC Road & Shivajinagar, Pune',
+      lat: 18.5204,
+      lng: 73.8567,
+      isBooked: false,
+    },
+    {
+      id: 'SLOT-DRV-02',
+      driverId: 'DRV-P1',
+      driverName: 'Ravi Kumar',
+      driverPhone: '+91 98220 44123',
+      vehicleNumber: 'MH 12 AB 2840',
+      vehicleType: 'Electric Tipper Truck (2.5T)',
+      date: tomorrow,
+      timeSlot: '08:00 – 10:00 AM',
+      location: 'FC Road & Shivajinagar, Pune',
+      lat: 18.5204,
+      lng: 73.8567,
+      isBooked: false,
+    },
+    {
+      id: 'SLOT-DRV-03',
+      driverId: 'DRV-P1',
+      driverName: 'Ravi Kumar',
+      driverPhone: '+91 98220 44123',
+      vehicleNumber: 'MH 12 AB 2840',
+      vehicleType: 'Electric Tipper Truck (2.5T)',
+      date: tomorrow,
+      timeSlot: '10:00 AM – 12:00 PM',
+      location: 'Kothrud & Karve Nagar, Pune',
+      lat: 18.5074,
+      lng: 73.8077,
+      isBooked: false,
+    },
+    {
+      id: 'SLOT-DRV-04',
+      driverId: 'DRV-P1',
+      driverName: 'Ravi Kumar',
+      driverPhone: '+91 98220 44123',
+      vehicleNumber: 'MH 12 AB 2840',
+      vehicleType: 'Electric Tipper Truck (2.5T)',
+      date: dayAfter,
+      timeSlot: '08:00 – 10:00 AM',
+      location: 'Viman Nagar, Pune',
+      lat: 18.5679,
+      lng: 73.9143,
+      isBooked: false,
+    },
+  ]
 }
 
 export const defaultDriverAssignments: DriverAssignment[] = [
@@ -658,15 +726,46 @@ export const database = {
     const lat = pickup.lat || userLoc.lat || 18.5204
     const lng = pickup.lng || userLoc.lng || 73.8567
 
-    // 2. Municipal Fleet Auto-Dispatch & Nearest Driver Matching
-    const activeDriver = database.getDriverProfile()
-    const driver = findNearestDriver(lat, lng, activeDriver)
+    // 2. Check for matching declared Driver Availability Slot
+    let assignedDriverName = pickup.driverName && pickup.driverName !== 'Pending assignment' ? pickup.driverName : ''
+    let assignedDriverPhone = pickup.driverPhone || ''
+    let assignedVehicleNumber = pickup.vehicleNumber || ''
+    let matchedSlotId = pickup.availabilitySlotId
+
+    // Try finding slot if ID is provided, or match available declared slots
+    if (matchedSlotId) {
+      const slot = database.getDriverAvailability().find((s) => s.id === matchedSlotId)
+      if (slot) {
+        assignedDriverName = slot.driverName
+        assignedDriverPhone = slot.driverPhone
+        assignedVehicleNumber = slot.vehicleNumber
+      }
+    } else {
+      // Auto-match an available driver who specifically declared they are free on this date & timeSlot
+      const availableSlots = database.getAvailableDriversForSlot(pickup.date, pickup.timeSlot, lat, lng, pickup.address)
+      if (availableSlots.length > 0) {
+        const bestSlot = availableSlots[0]
+        matchedSlotId = bestSlot.id
+        assignedDriverName = bestSlot.driverName
+        assignedDriverPhone = bestSlot.driverPhone
+        assignedVehicleNumber = bestSlot.vehicleNumber
+      }
+    }
+
+    // Fallback to active driver profile or nearest fleet driver if no slot matched
+    if (!assignedDriverName) {
+      const activeDriver = database.getDriverProfile()
+      const driver = findNearestDriver(lat, lng, activeDriver)
+      assignedDriverName = driver.name
+      assignedDriverPhone = driver.phone
+      assignedVehicleNumber = driver.vehicleNumber
+    }
 
     const distanceKm =
       Math.round(
         Math.hypot(
-          driver.lat - lat,
-          driver.lng - lng
+          lat - (userLoc.lat || 18.5204),
+          lng - (userLoc.lng || 73.8567)
         ) * 111 * 10
       ) / 10 || 2.4
 
@@ -677,15 +776,21 @@ export const database = {
       lat,
       lng,
       status: 'Accepted',
-      driverName: pickup.driverName && pickup.driverName !== 'Pending assignment' ? pickup.driverName : driver.name,
-      driverPhone: pickup.driverPhone || driver.phone,
-      vehicleNumber: pickup.vehicleNumber || driver.vehicleNumber,
+      driverName: assignedDriverName,
+      driverPhone: assignedDriverPhone,
+      vehicleNumber: assignedVehicleNumber,
+      availabilitySlotId: matchedSlotId,
       etaMinutes,
     }
 
     const current = database.getPickups()
     const next = [enrichedPickup, ...current]
     write(keys.pickups, next)
+
+    // Mark availability slot as booked
+    if (matchedSlotId) {
+      database.bookDriverSlot(matchedSlotId, enrichedPickup.id)
+    }
 
     // 3. Automatically insert scheduled pickup into Driver's Live Assignment Queue
     const newAssignment: DriverAssignment = {
@@ -710,8 +815,8 @@ export const database = {
     // 4. Send citizen notification with Driver name, vehicle number, and variable phone
     database.addNotification({
       id: `NOTIF-${Date.now()}`,
-      title: '🚛 Collection Vehicle Assigned!',
-      message: `Driver ${enrichedPickup.driverName} (${enrichedPickup.vehicleNumber}) has been assigned for ${enrichedPickup.date} (${enrichedPickup.timeSlot}). Driver Phone: ${enrichedPickup.driverPhone}. ETA: ~${etaMinutes} mins.`,
+      title: '🚛 Collection Vehicle Booked & Assigned!',
+      message: `Driver ${enrichedPickup.driverName} (${enrichedPickup.vehicleNumber}) has been assigned for ${enrichedPickup.date} (${enrichedPickup.timeSlot}). Driver Phone: ${enrichedPickup.driverPhone}. Direct contact: ${enrichedPickup.driverPhone}.`,
       time: 'Just now',
       read: false,
       type: 'pickup',
@@ -722,6 +827,93 @@ export const database = {
     }
 
     return enrichedPickup
+  },
+
+  updatePickupStatus(id: string, status: StoredPickup['status']): StoredPickup[] {
+    const pickups = read<StoredPickup[]>(keys.pickups, []).map((p) =>
+      p.id === id ? { ...p, status } : p
+    )
+    write(keys.pickups, pickups)
+    return pickups
+  },
+
+  // Driver Availability & Shift Scheduling
+  getDriverAvailability(): DriverAvailabilitySlot[] {
+    const stored = read<DriverAvailabilitySlot[]>(keys.driverAvailability, [])
+    if (stored.length > 0) return stored
+    const seed = generateSeedDriverAvailability()
+    write(keys.driverAvailability, seed)
+    return seed
+  },
+
+  publishDriverAvailability(slots: DriverAvailabilitySlot[]): DriverAvailabilitySlot[] {
+    write(keys.driverAvailability, slots)
+    return slots
+  },
+
+  addDriverAvailabilitySlot(slotData: Omit<DriverAvailabilitySlot, 'id' | 'isBooked'>): DriverAvailabilitySlot {
+    const current = database.getDriverAvailability()
+    const newSlot: DriverAvailabilitySlot = {
+      ...slotData,
+      id: `SLOT-${Date.now().toString().slice(-6)}`,
+      isBooked: false,
+      createdAt: new Date().toISOString(),
+    }
+    write(keys.driverAvailability, [newSlot, ...current])
+    return newSlot
+  },
+
+  deleteDriverAvailabilitySlot(id: string): DriverAvailabilitySlot[] {
+    const current = database.getDriverAvailability()
+    const next = current.filter((s) => s.id !== id)
+    write(keys.driverAvailability, next)
+    return next
+  },
+
+  getAvailableDriversForSlot(
+    date: string,
+    timeSlot: string,
+    lat?: number,
+    lng?: number,
+    location?: string
+  ): DriverAvailabilitySlot[] {
+    const all = database.getDriverAvailability()
+    const matching = all.filter((s) => s.date === date && s.timeSlot === timeSlot && !s.isBooked)
+
+    if (typeof lat === 'number' && typeof lng === 'number' && matching.length > 1) {
+      return [...matching].sort((a, b) => {
+        const distA = Math.hypot(a.lat - lat, a.lng - lng)
+        const distB = Math.hypot(b.lat - lat, b.lng - lng)
+        return distA - distB
+      })
+    }
+
+    if (location && matching.length > 1) {
+      const locClean = location.toLowerCase()
+      return [...matching].sort((a, b) => {
+        const matchA = locClean.includes(a.location.toLowerCase()) || a.location.toLowerCase().includes(locClean) ? -1 : 1
+        const matchB = locClean.includes(b.location.toLowerCase()) || b.location.toLowerCase().includes(locClean) ? -1 : 1
+        return matchA - matchB
+      })
+    }
+
+    return matching
+  },
+
+  bookDriverSlot(slotId: string, pickupId: string): boolean {
+    const current = database.getDriverAvailability()
+    let found = false
+    const next = current.map((s) => {
+      if (s.id === slotId) {
+        found = true
+        return { ...s, isBooked: true, bookedByPickupId: pickupId }
+      }
+      return s
+    })
+    if (found) {
+      write(keys.driverAvailability, next)
+    }
+    return found
   },
 
   // Driver Profile & Variable Contact
@@ -748,6 +940,21 @@ export const database = {
       return a
     })
     write(keys.assignments, nextAssignments)
+
+    // Synchronize across active unbooked availability slots
+    const currentSlots = read<DriverAvailabilitySlot[]>(keys.driverAvailability, [])
+    const nextSlots = currentSlots.map((s) => {
+      if (!s.isBooked && (s.driverName.includes(current.name) || s.driverName.includes(updated.name))) {
+        return {
+          ...s,
+          driverName: updated.name,
+          driverPhone: updated.phone,
+          vehicleNumber: updated.vehicleNumber,
+        }
+      }
+      return s
+    })
+    write(keys.driverAvailability, nextSlots)
 
     // Synchronize across active pickups
     const currentPickups = read<StoredPickup[]>(keys.pickups, [])

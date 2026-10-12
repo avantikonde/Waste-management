@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Truck,
   MapPin,
@@ -13,10 +13,13 @@ import {
   X,
   Check,
   UserCheck,
+  Calendar,
+  Plus,
+  Trash2,
 } from 'lucide-react'
-import type { DriverAssignment, DriverProfile } from '../types'
-import { database } from '../database'
-import { getGoogleMapsDirectionsUrl } from '../utils/geoUtils'
+import type { DriverAssignment, DriverProfile, DriverAvailabilitySlot } from '../types'
+import { database, subscribeToDatabase } from '../database'
+import { getGoogleMapsDirectionsUrl, getHighAccuracyPosition, reverseGeocode } from '../utils/geoUtils'
 import { getTimeOfDayGreeting } from '../utils/dateUtils'
 
 interface DriverViewProps {
@@ -30,8 +33,30 @@ export function DriverView({ onToast }: DriverViewProps) {
   const [assignments, setAssignments] = useState<DriverAssignment[]>(() =>
     database.getDriverAssignments()
   )
+  const [slots, setSlots] = useState<DriverAvailabilitySlot[]>(() =>
+    database.getDriverAvailability()
+  )
   const [vehicleCapacity, setVehicleCapacity] = useState(78)
   const [isEditingProfile, setIsEditingProfile] = useState(false)
+
+  // Declare free time slot state
+  const [isDeclaringSlot, setIsDeclaringSlot] = useState(false)
+  const [slotDate, setSlotDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [slotTimeSlot, setSlotTimeSlot] = useState('08:00 – 10:00 AM')
+  const [slotLocation, setSlotLocation] = useState(driverProfile.zone || 'Kothrud & Swargate, Pune')
+  const [slotLat, setSlotLat] = useState(18.5074)
+  const [slotLng, setSlotLng] = useState(73.8077)
+  const [isLocatingSlot, setIsLocatingSlot] = useState(false)
+
+  // Reactive subscription across database changes
+  useEffect(() => {
+    const unsub = subscribeToDatabase(() => {
+      setDriverProfile(database.getDriverProfile())
+      setAssignments(database.getDriverAssignments())
+      setSlots(database.getDriverAvailability())
+    })
+    return unsub
+  }, [])
 
   // Edit form state
   const [editName, setEditName] = useState(driverProfile.name)
@@ -70,6 +95,47 @@ export function DriverView({ onToast }: DriverViewProps) {
     setAssignments(database.getDriverAssignments())
     setIsEditingProfile(false)
     onToast(`✅ Driver profile saved! Your variable phone number (${updated.phone}) is now live on all assigned citizen dispatches.`)
+  }
+
+  const handleDetectSlotGps = async () => {
+    setIsLocatingSlot(true)
+    try {
+      const fix = await getHighAccuracyPosition()
+      setSlotLat(fix.lat)
+      setSlotLng(fix.lng)
+      const geo = await reverseGeocode(fix.lat, fix.lng)
+      setSlotLocation(`${geo.area}, ${geo.city}`)
+      onToast(`📍 Live GPS acquired: ${geo.area}`)
+    } catch {
+      onToast('Could not acquire GPS fix. Please enter duty location manually.')
+    } finally {
+      setIsLocatingSlot(false)
+    }
+  }
+
+  const handleAddSlot = (e: React.FormEvent) => {
+    e.preventDefault()
+    database.addDriverAvailabilitySlot({
+      driverId: 'drv-01',
+      driverName: driverProfile.name,
+      driverPhone: driverProfile.phone,
+      vehicleNumber: driverProfile.vehicleNumber,
+      vehicleType: driverProfile.vehicleType,
+      date: slotDate,
+      timeSlot: slotTimeSlot,
+      location: slotLocation.trim() || driverProfile.zone,
+      lat: slotLat,
+      lng: slotLng,
+    })
+    setSlots(database.getDriverAvailability())
+    setIsDeclaringSlot(false)
+    onToast(`✅ Availability slot published! Citizens booking ${slotDate} (${slotTimeSlot}) can now choose you directly.`)
+  }
+
+  const handleDeleteSlot = (id: string) => {
+    const next = database.deleteDriverAvailabilitySlot(id)
+    setSlots(next)
+    onToast('Shift slot removed from citizen booking list')
   }
 
   return (
@@ -271,6 +337,109 @@ export function DriverView({ onToast }: DriverViewProps) {
           </div>
         </div>
       </div>
+
+      {/* Driver Availability & Duty Slot Management */}
+      <section className="panel" style={{ marginBottom: '24px' }}>
+        <div className="panel-header">
+          <div className="panel-title-wrap">
+            <p>Citizen Doorstep Booking System</p>
+            <h2>My Declared Free Hours & Shift Slots</h2>
+          </div>
+          <button
+            type="button"
+            className="primary-btn"
+            style={{ width: 'auto' }}
+            onClick={() => {
+              setSlotLocation(driverProfile.zone || 'Kothrud & Swargate, Pune')
+              setIsDeclaringSlot(true)
+            }}
+          >
+            <Plus size={16} /> Declare Free Time Slot
+          </button>
+        </div>
+
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+          Select the date, time window, and area when you are on duty. Citizens booking doorstep waste pickups will see you listed, select your vehicle (<strong>{driverProfile.vehicleNumber}</strong>), and contact your mobile number (<strong>{driverProfile.phone}</strong>) directly.
+        </p>
+
+        {slots.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px', backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)' }}>
+            <Calendar size={32} color="var(--text-muted)" style={{ margin: '0 auto 8px' }} />
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13.5px', margin: 0 }}>
+              No availability slots declared yet. Click <strong>"Declare Free Time Slot"</strong> to open booking slots for citizens.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '12px' }}>
+            {slots.map((slot) => {
+              const isMine = slot.driverName === driverProfile.name || slot.driverPhone === driverProfile.phone
+              return (
+                <div
+                  key={slot.id}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: `1px solid ${slot.isBooked ? 'var(--primary-light)' : 'var(--border)'}`,
+                    backgroundColor: slot.isBooked ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-subtle)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    position: 'relative',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Calendar size={14} color="var(--primary)" />
+                      <strong style={{ fontSize: '13.5px', color: 'var(--text-primary)' }}>
+                        {slot.date}
+                      </strong>
+                    </div>
+
+                    {slot.isBooked ? (
+                      <span className="status-pill in-progress" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <Truck size={12} /> Booked ({slot.bookedByPickupId || 'Active'})
+                      </span>
+                    ) : (
+                      <span className="status-pill resolved" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckCircle2 size={12} /> Free / Open for Booking
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                    <Clock size={13} />
+                    <span>Time Window: <strong>{slot.timeSlot}</strong></span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                    <MapPin size={13} />
+                    <span>Area: <strong>{slot.location}</strong></span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '4px', paddingTop: '8px', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
+                      Driver: <strong>{slot.driverName}</strong> ({slot.vehicleNumber})<br />
+                      Phone: <a href={`tel:${slot.driverPhone}`} style={{ color: 'var(--primary)', textDecoration: 'underline' }}>{slot.driverPhone}</a>
+                    </div>
+
+                    {!slot.isBooked && isMine && (
+                      <button
+                        type="button"
+                        className="outline-btn"
+                        style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--rose)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                        onClick={() => handleDeleteSlot(slot.id)}
+                        title="Cancel this open slot"
+                      >
+                        <Trash2 size={12} /> Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Route Stop Sequence */}
       <section className="panel">
@@ -538,6 +707,116 @@ export function DriverView({ onToast }: DriverViewProps) {
                   style={{ flex: 1.5 }}
                 >
                   <Check size={16} /> Save Driver Profile & Number
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Declare Free Time Slot Modal */}
+      {isDeclaringSlot && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsDeclaringSlot(false)}>
+          <div className="modal-card" style={{ maxWidth: '500px' }} role="dialog" aria-modal="true" aria-labelledby="declare-slot-title">
+            <div className="modal-header">
+              <div>
+                <h2 id="declare-slot-title">Declare Free Shift & Service Slot</h2>
+                <p>Publish your availability so citizens can book doorstep collections directly with you during this window.</p>
+              </div>
+              <button className="modal-close-btn" onClick={() => setIsDeclaringSlot(false)} aria-label="Close dialog">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSlot} className="form-stack">
+              <label className="form-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Calendar size={13} /> Date of Availability
+                </span>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={slotDate}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setSlotDate(e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="form-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Clock size={13} /> Time Window
+                </span>
+                <select
+                  className="form-select"
+                  value={slotTimeSlot}
+                  onChange={(e) => setSlotTimeSlot(e.target.value)}
+                  required
+                >
+                  <option>08:00 – 10:00 AM</option>
+                  <option>10:00 AM – 12:00 PM</option>
+                  <option>02:00 – 04:00 PM</option>
+                  <option>04:00 – 06:00 PM</option>
+                </select>
+              </label>
+
+              <label className="form-label">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={13} /> Service Area / Operating Ward
+                  </span>
+                  <button
+                    type="button"
+                    className="outline-btn"
+                    style={{ padding: '2px 8px', fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    onClick={handleDetectSlotGps}
+                    disabled={isLocatingSlot}
+                  >
+                    <Navigation size={11} /> {isLocatingSlot ? 'Detecting...' : 'Use Live GPS'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={slotLocation}
+                  onChange={(e) => setSlotLocation(e.target.value)}
+                  placeholder="e.g. Kothrud & Swargate, Pune"
+                  required
+                />
+              </label>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  backgroundColor: 'var(--bg-subtle)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                }}
+              >
+                <div>Driver: <strong>{driverProfile.name}</strong></div>
+                <div>Vehicle: <strong>{driverProfile.vehicleNumber}</strong> ({driverProfile.vehicleType})</div>
+                <div>Direct Phone for Citizen Calls: <strong style={{ color: 'var(--primary)' }}>{driverProfile.phone}</strong></div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  className="outline-btn"
+                  style={{ flex: 1 }}
+                  onClick={() => setIsDeclaringSlot(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  style={{ flex: 1.5 }}
+                >
+                  <Check size={16} /> Publish Availability Slot
                 </button>
               </div>
             </form>
