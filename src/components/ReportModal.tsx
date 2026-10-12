@@ -8,6 +8,7 @@ import {
   AlertTriangle,
   RotateCw,
   ExternalLink,
+  Phone,
 } from 'lucide-react'
 import type { WasteCategory, ReportPriority, StoredReport } from '../types'
 import { database } from '../database'
@@ -17,6 +18,10 @@ interface ReportModalProps {
   onClose: () => void
   onSubmit: (report: StoredReport) => void
   onToast: (msg: string) => void
+}
+
+function generateReportId(): string {
+  return `CW-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
 }
 
 const categories: { label: WasteCategory; icon: string; desc: string }[] = [
@@ -71,6 +76,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
   )
   const [coordinates, setCoordinates] = useState({ lat: userLoc.lat, lng: userLoc.lng })
   const [description, setDescription] = useState('')
+  const [citizenPhone, setCitizenPhone] = useState('')
   const [isLocating, setIsLocating] = useState(() => typeof navigator !== 'undefined' && 'geolocation' in navigator)
 
   // Auto-detect current live GPS on open
@@ -144,7 +150,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    const id = `CW-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`
+    const id = generateReportId()
     const iconCode = category.slice(0, 2).toUpperCase()
 
     const newReport: StoredReport = {
@@ -163,6 +169,8 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
       image: imagePreview,
       reporterName: session?.name || 'Citizen User',
       reporterEmail: session?.email || '',
+      citizenPhone: citizenPhone.trim(),
+      reporterPhone: citizenPhone.trim(),
       createdAt: new Date().toISOString(),
       greenPointsAwarded: 50,
     }
@@ -306,6 +314,25 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
             />
+          </label>
+
+          {/* Citizen Contact Phone Number */}
+          <label className="form-label">
+            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <Phone size={13} color="var(--primary)" /> Your Contact Phone Number
+            </span>
+            <input
+              type="tel"
+              className="form-input"
+              value={citizenPhone}
+              onChange={(e) => setCitizenPhone(e.target.value)}
+              placeholder="+91 98765 43210"
+              pattern="[0-9+() -]{7,}"
+              required
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+              The assigned driver will receive this number after accepting the job to call you for directions.
+            </small>
           </label>
 
           {/* Location Detection with Google Maps link */}

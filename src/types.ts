@@ -30,6 +30,8 @@ export interface StoredReport {
   driverPhone?: string
   reporterName?: string
   reporterEmail?: string
+  citizenPhone?: string
+  reporterPhone?: string
   createdAt: string
   estimatedClearance?: string
   greenPointsAwarded?: number

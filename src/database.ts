@@ -650,7 +650,7 @@ export const database = {
       driverName: driver.name,
       driverPhone: driver.phone,
       vehicleNumber: driver.vehicleNumber,
-      citizenPhone: enrichedReport.reporterEmail || '+91 98220 88711',
+      citizenPhone: enrichedReport.citizenPhone || enrichedReport.reporterPhone || enrichedReport.reporterEmail || '+91 98220 88711',
       reportImage: enrichedReport.image,
     }
     const currentAssignments = read<DriverAssignment[]>(keys.assignments, defaultDriverAssignments)

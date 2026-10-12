@@ -44,6 +44,7 @@ export function DriverView({ onToast }: DriverViewProps) {
   const [slotDate, setSlotDate] = useState(() => new Date().toISOString().split('T')[0])
   const [slotTimeSlot, setSlotTimeSlot] = useState('08:00 – 10:00 AM')
   const [slotLocation, setSlotLocation] = useState(driverProfile.zone || 'Kothrud & Swargate, Pune')
+  const [slotPhone, setSlotPhone] = useState(driverProfile.phone)
   const [slotLat, setSlotLat] = useState(18.5074)
   const [slotLng, setSlotLng] = useState(73.8077)
   const [isLocatingSlot, setIsLocatingSlot] = useState(false)
@@ -71,7 +72,9 @@ export function DriverView({ onToast }: DriverViewProps) {
     const next = database.updateDriverAssignment(id, status)
     setAssignments(next)
 
-    if (status === 'Collected') {
+    if (status === 'Accepted') {
+      onToast(`✅ Stop ${id} accepted! Citizen contact phone number is now unlocked.`)
+    } else if (status === 'Collected') {
       setVehicleCapacity((prev) => Math.min(100, prev + 8))
       onToast(`Stop ${id} collected! Capacity updated to ${Math.min(100, vehicleCapacity + 8)}%`)
     } else {
@@ -115,10 +118,15 @@ export function DriverView({ onToast }: DriverViewProps) {
 
   const handleAddSlot = (e: React.FormEvent) => {
     e.preventDefault()
+    const activePhone = slotPhone.trim() || driverProfile.phone
+    if (activePhone !== driverProfile.phone) {
+      database.updateDriverProfile({ phone: activePhone })
+    }
+
     database.addDriverAvailabilitySlot({
       driverId: 'drv-01',
       driverName: driverProfile.name,
-      driverPhone: driverProfile.phone,
+      driverPhone: activePhone,
       vehicleNumber: driverProfile.vehicleNumber,
       vehicleType: driverProfile.vehicleType,
       date: slotDate,
@@ -129,7 +137,7 @@ export function DriverView({ onToast }: DriverViewProps) {
     })
     setSlots(database.getDriverAvailability())
     setIsDeclaringSlot(false)
-    onToast(`✅ Availability slot published! Citizens booking ${slotDate} (${slotTimeSlot}) can now choose you directly.`)
+    onToast(`✅ Availability slot published with phone ${activePhone}! Citizens can now book you directly.`)
   }
 
   const handleDeleteSlot = (id: string) => {
@@ -351,6 +359,7 @@ export function DriverView({ onToast }: DriverViewProps) {
             style={{ width: 'auto' }}
             onClick={() => {
               setSlotLocation(driverProfile.zone || 'Kothrud & Swargate, Pune')
+              setSlotPhone(driverProfile.phone)
               setIsDeclaringSlot(true)
             }}
           >
@@ -502,9 +511,16 @@ export function DriverView({ onToast }: DriverViewProps) {
                     {item.location} · {item.distanceKm} km away
                   </p>
                   {item.citizenPhone && (
-                    <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'block', marginTop: '2px' }}>
-                      Citizen Contact: <a href={`tel:${item.citizenPhone}`} style={{ color: 'var(--primary)', textDecoration: 'underline' }}>{item.citizenPhone}</a>
-                    </small>
+                    item.status === 'New' ? (
+                      <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
+                        <span>🔒</span>
+                        <span>Citizen Contact: <strong style={{ letterSpacing: '2px', color: 'var(--text-muted)' }}>••••••••••</strong> <em style={{ fontStyle: 'normal', color: 'var(--amber)', fontSize: '11px', fontWeight: 600 }}>(Accept job to reveal contact)</em></span>
+                      </small>
+                    ) : (
+                      <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'block', marginTop: '2px' }}>
+                        Citizen Contact: <a href={`tel:${item.citizenPhone}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'underline' }}>{item.citizenPhone}</a>
+                      </small>
+                    )
                   )}
                 </div>
 
@@ -527,7 +543,7 @@ export function DriverView({ onToast }: DriverViewProps) {
                       style={{ padding: '8px 16px', fontSize: '12.5px', width: 'auto' }}
                       onClick={() => handleStatusChange(item.id, 'Accepted')}
                     >
-                      Accept Job
+                      Accept Job & View Contact
                     </button>
                   )}
 
@@ -539,7 +555,7 @@ export function DriverView({ onToast }: DriverViewProps) {
                         style={{ padding: '8px 14px', fontSize: '12.5px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                         onClick={() => onToast(`Calling citizen for ${item.location} (${item.citizenPhone || 'contact'})...`)}
                       >
-                        <Phone size={14} /> Call Citizen
+                        <Phone size={14} /> Call Citizen ({item.citizenPhone})
                       </a>
                       <button
                         type="button"
@@ -553,19 +569,31 @@ export function DriverView({ onToast }: DriverViewProps) {
                   )}
 
                   {item.status === 'Arrived' && (
-                    <button
-                      type="button"
-                      className="primary-btn"
-                      style={{
-                        padding: '8px 16px',
-                        fontSize: '12.5px',
-                        width: 'auto',
-                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                      }}
-                      onClick={() => handleStatusChange(item.id, 'Collected')}
-                    >
-                      <Upload size={14} /> Complete & Clear
-                    </button>
+                    <>
+                      {item.citizenPhone && (
+                        <a
+                          href={`tel:${item.citizenPhone}`}
+                          className="outline-btn"
+                          style={{ padding: '8px 12px', fontSize: '12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                          onClick={() => onToast(`Calling citizen (${item.citizenPhone})...`)}
+                        >
+                          <Phone size={13} /> Call
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        className="primary-btn"
+                        style={{
+                          padding: '8px 16px',
+                          fontSize: '12.5px',
+                          width: 'auto',
+                          background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                        }}
+                        onClick={() => handleStatusChange(item.id, 'Collected')}
+                      >
+                        <Upload size={14} /> Complete & Clear
+                      </button>
+                    </>
                   )}
 
                   {item.status === 'Collected' && (
@@ -785,6 +813,24 @@ export function DriverView({ onToast }: DriverViewProps) {
                 />
               </label>
 
+              <label className="form-label">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Phone size={13} color="var(--primary)" /> Driver Contact Phone Number
+                </span>
+                <input
+                  type="tel"
+                  className="form-input"
+                  value={slotPhone}
+                  onChange={(e) => setSlotPhone(e.target.value)}
+                  placeholder="+91 98765 43210"
+                  pattern="[0-9+() -]{7,}"
+                  required
+                />
+                <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>
+                  Enter your active mobile number for this shift. Citizens who book this slot will receive this number after booking.
+                </small>
+              </label>
+
               <div
                 style={{
                   padding: '12px 14px',
@@ -799,7 +845,7 @@ export function DriverView({ onToast }: DriverViewProps) {
               >
                 <div>Driver: <strong>{driverProfile.name}</strong></div>
                 <div>Vehicle: <strong>{driverProfile.vehicleNumber}</strong> ({driverProfile.vehicleType})</div>
-                <div>Direct Phone for Citizen Calls: <strong style={{ color: 'var(--primary)' }}>{driverProfile.phone}</strong></div>
+                <div>Active Phone for this Slot: <strong style={{ color: 'var(--primary)' }}>{slotPhone || driverProfile.phone}</strong></div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>

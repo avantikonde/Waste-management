@@ -130,6 +130,9 @@ export function ReportDetailsModal({ report, onClose, onToast }: ReportDetailsMo
                 {report.reporterName && (
                   <small style={{ color: 'var(--text-muted)', fontSize: '11px', display: 'block', marginTop: '2px' }}>
                     Reported by: <strong>{report.reporterName}</strong>
+                    {(report.citizenPhone || report.reporterPhone) && (
+                      <span> · Contact: <a href={`tel:${report.citizenPhone || report.reporterPhone}`} style={{ color: 'var(--primary)', textDecoration: 'underline' }}>{report.citizenPhone || report.reporterPhone}</a></span>
+                    )}
                   </small>
                 )}
               </div>

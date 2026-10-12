@@ -235,15 +235,19 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <a
-                          href={`tel:${slot.driverPhone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="outline-btn"
-                          style={{ padding: '4px 8px', fontSize: '11.5px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          title="Call driver directly"
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            backgroundColor: 'var(--bg-surface)',
+                            border: '1px solid var(--border)',
+                            padding: '3px 8px',
+                            borderRadius: 'var(--radius-sm)',
+                            whiteSpace: 'nowrap',
+                          }}
                         >
-                          <Phone size={12} color="var(--primary)" /> {slot.driverPhone}
-                        </a>
+                          🔒 Contact revealed on booking
+                        </span>
                         <div
                           style={{
                             width: '18px',
