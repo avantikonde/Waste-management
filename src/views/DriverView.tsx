@@ -20,7 +20,7 @@ import {
 import type { DriverAssignment, DriverProfile, DriverAvailabilitySlot } from '../types'
 import { database, subscribeToDatabase } from '../database'
 import { getGoogleMapsDirectionsUrl, getHighAccuracyPosition, reverseGeocode } from '../utils/geoUtils'
-import { getTimeOfDayGreeting } from '../utils/dateUtils'
+import { getTimeOfDayGreeting, getLocalDateString, getUpcomingTimeSlot, formatDateLabel } from '../utils/dateUtils'
 
 interface DriverViewProps {
   onToast: (msg: string) => void
@@ -41,8 +41,8 @@ export function DriverView({ onToast }: DriverViewProps) {
 
   // Declare free time slot state
   const [isDeclaringSlot, setIsDeclaringSlot] = useState(false)
-  const [slotDate, setSlotDate] = useState(() => new Date().toISOString().split('T')[0])
-  const [slotTimeSlot, setSlotTimeSlot] = useState('08:00 – 10:00 AM')
+  const [slotDate, setSlotDate] = useState(() => getLocalDateString(0))
+  const [slotTimeSlot, setSlotTimeSlot] = useState(() => getUpcomingTimeSlot())
   const [slotLocation, setSlotLocation] = useState(driverProfile.zone || 'Kothrud & Swargate, Pune')
   const [slotPhone, setSlotPhone] = useState(driverProfile.phone)
   const [slotLat, setSlotLat] = useState(18.5074)
@@ -157,7 +157,10 @@ export function DriverView({ onToast }: DriverViewProps) {
           </div>
           <h1>Driver & Collection Crew Command</h1>
           <p className="page-subtitle">
-            {getTimeOfDayGreeting()}, Driver {driverProfile.name}. Your next optimized stop is <strong>1.4 km away</strong>.
+            {getTimeOfDayGreeting()}, Driver {driverProfile.name}. Your next optimized stop is{' '}
+            <strong>
+              {assignments.find((a) => a.status !== 'Collected')?.distanceKm || 1.2} km away
+            </strong>.
           </p>
         </div>
 
@@ -308,7 +311,9 @@ export function DriverView({ onToast }: DriverViewProps) {
             <strong className="stat-value">
               {assignments.filter((a) => a.status !== 'Collected').length}
             </strong>
-            <span className="stat-trend warning">Next at 10:45 AM</span>
+            <span className="stat-trend warning">
+              {assignments.find((a) => a.status !== 'Collected')?.timeSlot || 'Active shift'}
+            </span>
           </div>
         </div>
 
@@ -318,7 +323,9 @@ export function DriverView({ onToast }: DriverViewProps) {
           </div>
           <div className="stat-body">
             <span className="stat-label">Collected Today</span>
-            <strong className="stat-value">12 Stops</strong>
+            <strong className="stat-value">
+              {12 + assignments.filter((a) => a.status === 'Collected').length} Stops
+            </strong>
             <span className="stat-trend">+20% efficiency</span>
           </div>
         </div>
@@ -358,6 +365,8 @@ export function DriverView({ onToast }: DriverViewProps) {
             className="primary-btn"
             style={{ width: 'auto' }}
             onClick={() => {
+              setSlotDate(getLocalDateString(0))
+              setSlotTimeSlot(getUpcomingTimeSlot())
               setSlotLocation(driverProfile.zone || 'Kothrud & Swargate, Pune')
               setSlotPhone(driverProfile.phone)
               setIsDeclaringSlot(true)
@@ -400,7 +409,7 @@ export function DriverView({ onToast }: DriverViewProps) {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Calendar size={14} color="var(--primary)" />
                       <strong style={{ fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                        {slot.date}
+                        {formatDateLabel(slot.date)}
                       </strong>
                     </div>
 
@@ -491,7 +500,7 @@ export function DriverView({ onToast }: DriverViewProps) {
                 )}
 
                 <div className="driver-stop-info">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <strong>{item.type}</strong>
                     <span
                       style={{
@@ -505,6 +514,21 @@ export function DriverView({ onToast }: DriverViewProps) {
                     >
                       {item.priority}
                     </span>
+                    {item.timeSlot && (
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          padding: '2px 6px',
+                          borderRadius: 'var(--radius-sm)',
+                          backgroundColor: 'var(--bg-subtle)',
+                          border: '1px solid var(--border)',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        <Clock size={10} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '3px' }} />
+                        {item.timeSlot}
+                      </span>
+                    )}
                   </div>
                   <p>
                     <MapPin size={12} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '3px' }} />
@@ -765,7 +789,7 @@ export function DriverView({ onToast }: DriverViewProps) {
                   type="date"
                   className="form-input"
                   value={slotDate}
-                  min={new Date().toISOString().split('T')[0]}
+                  min={getLocalDateString(0)}
                   onChange={(e) => setSlotDate(e.target.value)}
                   required
                 />

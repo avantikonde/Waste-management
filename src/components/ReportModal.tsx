@@ -13,6 +13,7 @@ import {
 import type { WasteCategory, ReportPriority, StoredReport } from '../types'
 import { database } from '../database'
 import { reverseGeocode, getGoogleMapsUrl, getHighAccuracyPosition } from '../utils/geoUtils'
+import { formatFullDateTime } from '../utils/dateUtils'
 
 interface ReportModalProps {
   onClose: () => void
@@ -152,6 +153,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
     e.preventDefault()
     const id = generateReportId()
     const iconCode = category.slice(0, 2).toUpperCase()
+    const nowIso = new Date().toISOString()
 
     const newReport: StoredReport = {
       id,
@@ -163,7 +165,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
       lng: coordinates.lng,
       status: 'Submitted',
       priority,
-      time: 'Just now',
+      time: formatFullDateTime(nowIso),
       icon: iconCode,
       description,
       image: imagePreview,
@@ -171,7 +173,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
       reporterEmail: session?.email || '',
       citizenPhone: citizenPhone.trim(),
       reporterPhone: citizenPhone.trim(),
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
       greenPointsAwarded: 50,
     }
 

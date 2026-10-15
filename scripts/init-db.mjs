@@ -1,5 +1,8 @@
-import { neon } from '@neondatabase/serverless'
+import { neon, neonConfig } from '@neondatabase/serverless'
 import fs from 'node:fs'
+
+// Fix Neon HTTP endpoint resolution for c-5 cluster hostnames
+neonConfig.fetchEndpoint = (host) => `https://${host}/sql`
 
 // Read DATABASE_URL from .env if not in process.env
 let dbUrl = process.env.DATABASE_URL
@@ -22,12 +25,25 @@ if (!dbUrl) {
   process.exit(1)
 }
 
+dbUrl = dbUrl.replace(/[&?]channel_binding=require/g, '')
+
 function getLocalDateString(offsetDays = 0) {
   const d = new Date(Date.now() + offsetDays * 86400000)
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function formatDbTimestamp(ms) {
+  return new Date(ms).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
 }
 
 console.log('🔌 Connecting to Neon PostgreSQL...')
@@ -228,6 +244,29 @@ async function initializeDatabase() {
     const tomorrow = getLocalDateString(1)
     const dayAfter = getLocalDateString(2)
 
+    // Seed Users
+    console.log('👤 Seeding default users into users table...')
+    await sql`
+      INSERT INTO users (id, name, email, password, role, ward, city, green_points, created_at)
+      VALUES
+        ('USR-01', 'Rohan Patil', 'rohan.patil@cleanconnect.pune', 'password123', 'Citizen', 'Shivajinagar - Ghole Rd (PMC Ward 1)', 'Pune', 1240, NOW()),
+        ('USR-02', 'Avantika Kumar', 'avantika.k@pune-clean.gov.in', 'password123', 'Citizen', 'Kothrud - Bavdhan (PMC Ward 2)', 'Pune', 2150, NOW()),
+        ('USR-03', 'Driver Ravi Kumar', 'driver.ravi@cleanconnect.pune', 'password123', 'Driver', 'Central Ward & Swargate Sector', 'Pune', 800, NOW()),
+        ('USR-04', 'Supervisor Deshmukh', 'admin.deshmukh@cleanconnect.pune', 'password123', 'Admin', 'PMC Central Command', 'Pune', 1500, NOW())
+      ON CONFLICT (email) DO UPDATE SET
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        ward = EXCLUDED.ward,
+        city = EXCLUDED.city,
+        password = COALESCE(users.password, EXCLUDED.password);
+    `
+
+    const t1 = now - 18 * 60 * 1000
+    const t2 = now - 45 * 60 * 1000
+    const t3 = now - 2 * 3600 * 1000
+    const t4 = now - 22 * 3600 * 1000
+    const t5 = now - 46 * 3600 * 1000
+
     await sql`
       INSERT INTO reports (
         id, type, category, location, address_details, lat, lng,
@@ -236,14 +275,15 @@ async function initializeDatabase() {
         created_at, green_points_awarded,
         assigned_driver, vehicle_number, driver_phone, estimated_clearance
       ) VALUES
-        ('CW-2026-009102', 'Mixed waste', 'Mixed waste', 'FC Road, Near Goodluck Cafe, Pune', 'Commercial sidewalk corner near restaurant strip', 18.5186, 73.8415, 'Assigned', 'High', '18 min ago', 'MW', 'Unsorted commercial boxes and domestic plastic accumulated near pedestrian crossing.', 'Rohan Patil', 'rohan.patil@cleanconnect.pune', '+91 98220 88711', '+91 98220 88711', ${new Date(now - 18 * 60 * 1000).toISOString()}, 50, 'Ravi Kumar', 'MH 12 AB 2840', '+91 98220 44123', 'Within 30 mins'),
-        ('CW-2026-009088', 'Plastic & packaging', 'Plastic & packaging', 'Viman Nagar, Datta Mandir Chowk, Pune', 'Near Phoenix Marketcity service road', 18.5679, 73.9143, 'Team on way', 'Medium', '45 min ago', 'PP', 'Single-use packaging, plastic bottles, and snack wrappers left near park pathway.', 'Avantika Kumar', 'avantika.k@pune-clean.gov.in', '+91 98220 33419', '+91 98220 33419', ${new Date(now - 45 * 60 * 1000).toISOString()}, 50, 'Ravi Kumar', 'MH 12 AB 2840', '+91 98220 44123', '15 mins'),
-        ('CW-2026-009065', 'Overflowing Bin', 'Mixed waste', 'Koregaon Park, Lane 5, Pune', 'Opposite Osho Garden entrance', 18.5362, 73.8940, 'Submitted', 'High', '2 hrs ago', 'OB', 'Public bin at capacity; roadside spillage onto jogging lane. Rapid clearance requested.', 'Pooja Kulkarni', 'pooja.k@cleanconnect.pune', '+91 98224 77102', '+91 98224 77102', ${new Date(now - 2 * 3600 * 1000).toISOString()}, 50, 'Amit Deshmukh', 'MH 12 GH 9034', '+91 98229 11984', 'Within 45 mins'),
-        ('CW-2026-009071', 'Construction debris', 'Construction debris', 'Kothrud, Near Karve Statue, Pune', 'Near Mayur Colony main road', 18.5074, 73.8077, 'Resolved', 'Critical', 'Yesterday', 'CD', 'Broken concrete slabs and demolition plaster obstructing residential entry. Cleared by PMC Heavy Squad.', 'Suresh Shinde', 'suresh.s@cleanconnect.pune', '+91 98221 90112', '+91 98221 90112', ${new Date(now - 22 * 3600 * 1000).toISOString()}, 100, 'Nitin Pawar', 'MH 12 EF 7721', '+91 98224 88712', 'Cleared & Verified'),
-        ('CW-2026-009054', 'Organic waste', 'Organic waste', 'Shivajinagar, Modern College Chowk, Pune', 'Fresh produce transit point', 18.5308, 73.8474, 'Resolved', 'Medium', '2 days ago', 'OW', 'Vegetable leaves and organic wet waste diverted directly to PMC bio-methanation plant.', 'Rohan Patil', 'rohan.patil@cleanconnect.pune', '+91 98220 88711', '+91 98220 88711', ${new Date(now - 46 * 3600 * 1000).toISOString()}, 50, 'Suresh Patil', 'MH 12 CD 3912', '+91 98221 55678', 'Cleared & Verified')
+        ('CW-2026-009102', 'Mixed waste', 'Mixed waste', 'FC Road, Near Goodluck Cafe, Pune', 'Commercial sidewalk corner near restaurant strip', 18.5186, 73.8415, 'Assigned', 'High', ${formatDbTimestamp(t1)}, 'MW', 'Unsorted commercial boxes and domestic plastic accumulated near pedestrian crossing.', 'Rohan Patil', 'rohan.patil@cleanconnect.pune', '+91 98220 88711', '+91 98220 88711', ${new Date(t1).toISOString()}, 50, 'Ravi Kumar', 'MH 12 AB 2840', '+91 98220 44123', 'Within 30 mins'),
+        ('CW-2026-009088', 'Plastic & packaging', 'Plastic & packaging', 'Viman Nagar, Datta Mandir Chowk, Pune', 'Near Phoenix Marketcity service road', 18.5679, 73.9143, 'Team on way', 'Medium', ${formatDbTimestamp(t2)}, 'PP', 'Single-use packaging, plastic bottles, and snack wrappers left near park pathway.', 'Avantika Kumar', 'avantika.k@pune-clean.gov.in', '+91 98220 33419', '+91 98220 33419', ${new Date(t2).toISOString()}, 50, 'Ravi Kumar', 'MH 12 AB 2840', '+91 98220 44123', '15 mins'),
+        ('CW-2026-009065', 'Overflowing Bin', 'Mixed waste', 'Koregaon Park, Lane 5, Pune', 'Opposite Osho Garden entrance', 18.5362, 73.8940, 'Submitted', 'High', ${formatDbTimestamp(t3)}, 'OB', 'Public bin at capacity; roadside spillage onto jogging lane. Rapid clearance requested.', 'Pooja Kulkarni', 'pooja.k@cleanconnect.pune', '+91 98224 77102', '+91 98224 77102', ${new Date(t3).toISOString()}, 50, 'Amit Deshmukh', 'MH 12 GH 9034', '+91 98229 11984', 'Within 45 mins'),
+        ('CW-2026-009071', 'Construction debris', 'Construction debris', 'Kothrud, Near Karve Statue, Pune', 'Near Mayur Colony main road', 18.5074, 73.8077, 'Resolved', 'Critical', ${formatDbTimestamp(t4)}, 'CD', 'Broken concrete slabs and demolition plaster obstructing residential entry. Cleared by PMC Heavy Squad.', 'Suresh Shinde', 'suresh.s@cleanconnect.pune', '+91 98221 90112', '+91 98221 90112', ${new Date(t4).toISOString()}, 100, 'Nitin Pawar', 'MH 12 EF 7721', '+91 98224 88712', 'Cleared & Verified'),
+        ('CW-2026-009054', 'Organic waste', 'Organic waste', 'Shivajinagar, Modern College Chowk, Pune', 'Fresh produce transit point', 18.5308, 73.8474, 'Resolved', 'Medium', ${formatDbTimestamp(t5)}, 'OW', 'Vegetable leaves and organic wet waste diverted directly to PMC bio-methanation plant.', 'Rohan Patil', 'rohan.patil@cleanconnect.pune', '+91 98220 88711', '+91 98220 88711', ${new Date(t5).toISOString()}, 50, 'Suresh Patil', 'MH 12 CD 3912', '+91 98221 55678', 'Cleared & Verified')
       ON CONFLICT (id) DO UPDATE SET
         category = EXCLUDED.category,
         status = EXCLUDED.status,
+        time = EXCLUDED.time,
         created_at = EXCLUDED.created_at,
         assigned_driver = EXCLUDED.assigned_driver,
         vehicle_number = EXCLUDED.vehicle_number,
@@ -251,6 +291,18 @@ async function initializeDatabase() {
         citizen_phone = EXCLUDED.citizen_phone,
         reporter_phone = EXCLUDED.reporter_phone,
         estimated_clearance = EXCLUDED.estimated_clearance;
+    `
+
+    // Update any other existing rows in reports and notifications that still say 'Just now'
+    await sql`
+      UPDATE reports
+      SET time = TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+      WHERE time = 'Just now' OR time IS NULL;
+    `
+    await sql`
+      UPDATE notifications
+      SET time = TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+      WHERE time = 'Just now' OR time IS NULL;
     `
 
     await sql`

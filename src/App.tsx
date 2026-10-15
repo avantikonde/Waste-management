@@ -142,9 +142,9 @@ export default function App() {
     }
   }
 
-  // Subscribe to live database changes
+  // Subscribe to live database changes and periodically refresh relative timestamps & Neon sync
   useEffect(() => {
-    return subscribeToDatabase(() => {
+    const refreshFromDb = () => {
       setReports(database.getReports())
       setPickups(database.getPickups())
       setGreenPoints(database.getGreenPoints())
@@ -155,7 +155,20 @@ export default function App() {
       if (currentSession) {
         setSession(currentSession)
       }
-    })
+    }
+
+    const unsub = subscribeToDatabase(refreshFromDb)
+
+    // Refresh live timestamps & sync with Neon PostgreSQL every 30 seconds
+    const timerId = window.setInterval(() => {
+      refreshFromDb()
+      void database.syncFromNeon()
+    }, 30000)
+
+    return () => {
+      unsub()
+      window.clearInterval(timerId)
+    }
   }, [])
 
   useEffect(() => {

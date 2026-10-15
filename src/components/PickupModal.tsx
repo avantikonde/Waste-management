@@ -3,6 +3,7 @@ import { Truck, X, ArrowRight, Calendar, Clock, MapPin, Phone, Navigation } from
 import type { StoredPickup } from '../types'
 import { database } from '../database'
 import { getHighAccuracyPosition, reverseGeocode } from '../utils/geoUtils'
+import { getLocalDateString, getUpcomingTimeSlot, formatDateLabel } from '../utils/dateUtils'
 
 interface PickupModalProps {
   onClose: () => void
@@ -15,10 +16,11 @@ function generatePickupId(): string {
 
 export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
   const userLoc = database.getLocation()
+  const allOpenSlots = database.getDriverAvailability().filter((s) => !s.isBooked)
   const [pickupType, setPickupType] = useState('Household waste')
   const [quantity, setQuantity] = useState('10–25 kg')
-  const [date, setDate] = useState(() => new Date(Date.now() + 86400000).toISOString().split('T')[0])
-  const [timeSlot, setTimeSlot] = useState('08:00 – 10:00 AM')
+  const [date, setDate] = useState(() => allOpenSlots[0]?.date || getLocalDateString(0))
+  const [timeSlot, setTimeSlot] = useState(() => allOpenSlots[0]?.timeSlot || getUpcomingTimeSlot())
   const [address, setAddress] = useState(() =>
     userLoc.area ? `${userLoc.area}, ${userLoc.city}` : userLoc.city || ''
   )
@@ -163,7 +165,7 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
                 type="date"
                 className="form-input"
                 value={date}
-                min={new Date().toISOString().split('T')[0]}
+                min={getLocalDateString(0)}
                 onChange={(e) => setDate(e.target.value)}
                 required
               />
@@ -230,7 +232,7 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
                           </span>
                         </div>
                         <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'block', marginTop: '2px' }}>
-                          Operating Area: {slot.location} · Shift: {slot.timeSlot}
+                          Operating Area: {slot.location} · Shift: {formatDateLabel(slot.date)} ({slot.timeSlot})
                         </small>
                       </div>
 
@@ -265,6 +267,45 @@ export function PickupModal({ onClose, onSubmit }: PickupModalProps) {
                     </div>
                   )
                 })}
+              </div>
+            ) : allOpenSlots.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                <small style={{ color: 'var(--amber)', fontSize: '11.5px' }}>
+                  No driver declared for {formatDateLabel(date)} ({timeSlot}). Click an available shift below to switch to it:
+                </small>
+                {allOpenSlots.slice(0, 3).map((slot) => (
+                  <div
+                    key={slot.id}
+                    onClick={() => {
+                      setDate(slot.date)
+                      setTimeSlot(slot.timeSlot)
+                      setSelectedSlotId(slot.id)
+                    }}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px dashed var(--primary)',
+                      backgroundColor: 'var(--bg-subtle)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                    }}
+                  >
+                    <div>
+                      <strong style={{ fontSize: '13px', color: 'var(--text-primary)' }}>
+                        {slot.driverName} · {slot.vehicleNumber}
+                      </strong>
+                      <small style={{ color: 'var(--text-muted)', fontSize: '11.5px', display: 'block' }}>
+                        {formatDateLabel(slot.date)} · {slot.timeSlot} · {slot.location}
+                      </small>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: 600 }}>
+                      Select Shift →
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div

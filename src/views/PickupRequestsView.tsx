@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import type { StoredPickup } from '../types'
 import { database } from '../database'
+import { formatClockTime, formatDateLabel, formatRelativeTime } from '../utils/dateUtils'
 
 interface PickupRequestsViewProps {
   pickups: StoredPickup[]
@@ -25,6 +26,19 @@ export function PickupRequestsView({
 }: PickupRequestsViewProps) {
   const activePickup = pickups[0]
   const loc = database.getLocation()
+  const completedCount = pickups.filter((p) => p.status === 'Completed').length
+  const upcomingPickups = pickups.filter((p) => p.status !== 'Completed')
+
+  const nextWindowLabel = activePickup
+    ? `Next: ${formatDateLabel(activePickup.date)} · ${activePickup.timeSlot}`
+    : 'No pending bookings'
+
+  const loggedTimeLabel = activePickup?.createdAt
+    ? `${formatClockTime(activePickup.createdAt)} (${formatRelativeTime(activePickup.createdAt)})`
+    : 'Just logged'
+
+  const assignedDriverName = activePickup?.driverName || database.getDriverProfile().name
+  const assignedVehicle = activePickup?.vehicleNumber || database.getDriverProfile().vehicleNumber
 
   return (
     <div className="page-content">
@@ -54,8 +68,8 @@ export function PickupRequestsView({
           </div>
           <div className="stat-body">
             <span className="stat-label">Upcoming Pickups</span>
-            <strong className="stat-value">{String(pickups.length).padStart(2, '0')}</strong>
-            <span className="stat-trend warning">Next: Today 10:42 AM</span>
+            <strong className="stat-value">{String(upcomingPickups.length).padStart(2, '0')}</strong>
+            <span className="stat-trend warning">{nextWindowLabel}</span>
           </div>
         </div>
 
@@ -65,7 +79,7 @@ export function PickupRequestsView({
           </div>
           <div className="stat-body">
             <span className="stat-label">Completed Collections</span>
-            <strong className="stat-value">14</strong>
+            <strong className="stat-value">{14 + completedCount}</strong>
             <span className="stat-trend">100% on-time fulfillment</span>
           </div>
         </div>
@@ -128,7 +142,7 @@ export function PickupRequestsView({
                   Scheduled Window
                 </span>
                 <strong style={{ fontSize: '13.5px', color: 'var(--text-primary)' }}>
-                  {activePickup.date} ({activePickup.timeSlot})
+                  {formatDateLabel(activePickup.date)} ({activePickup.timeSlot})
                 </strong>
               </div>
 
@@ -137,7 +151,7 @@ export function PickupRequestsView({
                   Assigned Driver & Vehicle
                 </span>
                 <strong style={{ fontSize: '13.5px', color: 'var(--primary)' }}>
-                  {activePickup.driverName || database.getDriverProfile().name} · {activePickup.vehicleNumber || database.getDriverProfile().vehicleNumber}
+                  {assignedDriverName} · {assignedVehicle}
                 </strong>
                 <small style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '11px', marginTop: '2px' }}>
                   Direct Phone: {activePickup.driverPhone || database.getDriverProfile().phone}
@@ -178,7 +192,7 @@ export function PickupRequestsView({
                 href={`tel:${activePickup.driverPhone || database.getDriverProfile().phone}`}
                 className="outline-btn"
                 style={{ flex: 1, textDecoration: 'none', justifyContent: 'center' }}
-                onClick={() => onToast(`Calling municipal driver ${activePickup.driverName || database.getDriverProfile().name} (${activePickup.driverPhone || database.getDriverProfile().phone})...`)}
+                onClick={() => onToast(`Calling municipal driver ${assignedDriverName} (${activePickup.driverPhone || database.getDriverProfile().phone})...`)}
               >
                 <Phone size={14} /> Call Driver ({activePickup.driverPhone || database.getDriverProfile().phone})
               </a>
@@ -209,33 +223,59 @@ export function PickupRequestsView({
                 </div>
                 <div className="step-content">
                   <strong>Request Accepted & Logged</strong>
-                  <small>09:48 AM · Booking confirmed by central depot</small>
+                  <small>{loggedTimeLabel} · Booking confirmed in database</small>
                 </div>
               </div>
 
-              <div className="timeline-step completed">
+              <div className={`timeline-step ${activePickup.driverName ? 'completed' : 'active'}`}>
                 <div className="step-marker">
-                  <CheckCircle2 size={12} />
+                  {activePickup.driverName ? <CheckCircle2 size={12} /> : 2}
                 </div>
                 <div className="step-content">
                   <strong>Collection Vehicle Assigned</strong>
-                  <small>09:51 AM · Driver Ravi K. allocated</small>
+                  <small>
+                    {activePickup.driverName
+                      ? `Driver ${assignedDriverName} (${assignedVehicle}) allocated`
+                      : 'Auto-allocating nearest municipal crew'}
+                  </small>
                 </div>
               </div>
 
-              <div className="timeline-step active">
-                <div className="step-marker">3</div>
+              <div
+                className={`timeline-step ${
+                  activePickup.status === 'Completed'
+                    ? 'completed'
+                    : activePickup.status === 'En route'
+                      ? 'active'
+                      : ''
+                }`}
+              >
+                <div className="step-marker">
+                  {activePickup.status === 'Completed' ? <CheckCircle2 size={12} /> : 3}
+                </div>
                 <div className="step-content">
                   <strong>Vehicle En Route</strong>
-                  <small>10:02 AM · In transit towards {loc.area || loc.city || 'your area'}</small>
+                  <small>
+                    {activePickup.status === 'Completed'
+                      ? `Arrived at ${activePickup.address}`
+                      : activePickup.status === 'En route'
+                        ? `Active transit towards ${loc.area || loc.city || activePickup.address}`
+                        : `Scheduled for ${formatDateLabel(activePickup.date)} (${activePickup.timeSlot})`}
+                  </small>
                 </div>
               </div>
 
-              <div className="timeline-step">
-                <div className="step-marker">4</div>
+              <div className={`timeline-step ${activePickup.status === 'Completed' ? 'completed' : ''}`}>
+                <div className="step-marker">
+                  {activePickup.status === 'Completed' ? <CheckCircle2 size={12} /> : 4}
+                </div>
                 <div className="step-content">
                   <strong>Doorstep Weighing & Collection</strong>
-                  <small>Pending arrival · Estimated 10:20 AM</small>
+                  <small>
+                    {activePickup.status === 'Completed'
+                      ? 'Waste weighed, segregated & safely collected'
+                      : `Scheduled window · ${formatDateLabel(activePickup.date)}, ${activePickup.timeSlot}`}
+                  </small>
                 </div>
               </div>
             </div>

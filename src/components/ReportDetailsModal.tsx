@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import type { StoredReport } from '../types'
 import { getGoogleMapsUrl } from '../utils/geoUtils'
-import { formatRelativeTime } from '../utils/dateUtils'
+import { formatRelativeTime, formatFullDateTime, formatClockTime } from '../utils/dateUtils'
 
 interface ReportDetailsModalProps {
   report: StoredReport | null
@@ -21,11 +21,22 @@ interface ReportDetailsModalProps {
 export function ReportDetailsModal({ report, onClose, onToast }: ReportDetailsModalProps) {
   if (!report) return null
 
+  const submittedTimeLabel = report.createdAt
+    ? `${formatFullDateTime(report.createdAt)} (${formatRelativeTime(report.createdAt)})`
+    : report.time
+
+  const verificationTimeLabel =
+    report.status !== 'Submitted'
+      ? report.createdAt
+        ? formatClockTime(new Date(new Date(report.createdAt).getTime() + 15 * 60 * 1000).toISOString())
+        : 'Verified'
+      : 'Pending inspection'
+
   const steps = [
-    { title: 'Report Submitted', time: formatRelativeTime(report.createdAt) || report.time, desc: 'Logged and geo-tagged in civic registry', status: 'done' },
+    { title: 'Report Submitted', time: submittedTimeLabel, desc: 'Logged and geo-tagged in civic registry', status: 'done' },
     {
       title: 'Ward Verification',
-      time: report.status !== 'Submitted' ? '30 mins later' : 'Pending inspection',
+      time: verificationTimeLabel,
       desc: 'Ward supervisor confirmed location coordinates',
       status: report.status !== 'Submitted' ? 'done' : 'active',
     },

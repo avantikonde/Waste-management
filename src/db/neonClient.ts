@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless'
+import { neon, neonConfig } from '@neondatabase/serverless'
 import type {
   StoredReport,
   StoredPickup,
@@ -11,15 +11,20 @@ import type {
   DriverProfile,
   WasteCategory,
 } from '../types'
-import { getLocalDateString } from '../utils/dateUtils'
+import { getLocalDateString, formatFullDateTime, formatRelativeTime } from '../utils/dateUtils'
 
-const rawDbUrl = (import.meta.env.VITE_DATABASE_URL as string | undefined) || ''
+// Fix Neon HTTP endpoint resolution for c-5 cluster hostnames
+neonConfig.fetchEndpoint = (host) => `https://${host}/sql`
+neonConfig.disableWarningInBrowsers = true
+
+const rawDbUrl = ((import.meta.env.VITE_DATABASE_URL as string | undefined) || '').trim()
+const cleanDbUrl = rawDbUrl.replace(/[&?]channel_binding=require/g, '')
 
 export const isNeonConfigured = Boolean(
-  rawDbUrl &&
-    rawDbUrl.startsWith('postgres') &&
-    !rawDbUrl.includes('username:password') &&
-    !rawDbUrl.includes('ep-your-id')
+  cleanDbUrl &&
+    cleanDbUrl.startsWith('postgres') &&
+    !cleanDbUrl.includes('username:password') &&
+    !cleanDbUrl.includes('ep-your-id')
 )
 
 // Lazy instantiation
@@ -30,7 +35,7 @@ export function getSql() {
   if (!isNeonConfigured) return null
   if (!sqlInstance) {
     try {
-      sqlInstance = neon(rawDbUrl)
+      sqlInstance = neon(cleanDbUrl)
     } catch (err) {
       console.error('Failed to initialize Neon client:', err)
       return null
@@ -192,10 +197,20 @@ export async function ensureNeonSchema(): Promise<void> {
         );
       `
 
-      // 7. Clean up legacy v1 seed records with invalid categories/statuses/dates
+      // 7. Clean up legacy v1 seed records and fix any 'Just now' time columns in database
       await sql`
         DELETE FROM reports
         WHERE id IN ('CW-2026-008492', 'CW-2026-008441', 'CW-2026-008390', 'CW-2026-008210');
+      `
+      await sql`
+        UPDATE reports
+        SET time = TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+        WHERE time = 'Just now' OR time IS NULL;
+      `
+      await sql`
+        UPDATE notifications
+        SET time = TO_CHAR(created_at AT TIME ZONE 'Asia/Kolkata', 'DD Mon YYYY, HH12:MI AM')
+        WHERE time = 'Just now' OR time IS NULL;
       `
       await sql`
         DELETE FROM pickups
@@ -205,7 +220,7 @@ export async function ensureNeonSchema(): Promise<void> {
         UPDATE pickups
         SET status = 'En route',
             date = ${getLocalDateString(0)},
-            time_slot = '08:00 – 10:00 AM',
+            time_slot = '10:00 AM – 12:00 PM',
             driver_name = COALESCE(driver_name, 'Ravi Kumar'),
             driver_phone = COALESCE(driver_phone, '+91 98220 44123'),
             contact = COALESCE(contact, '+91 98220 12345')
@@ -263,6 +278,10 @@ function mapRowToReport(row: Record<string, unknown>): StoredReport {
       ? String(row.reporter_phone)
       : '+91 98220 88711'
 
+  const createdAt = row.created_at
+    ? new Date(String(row.created_at)).toISOString()
+    : new Date().toISOString()
+
   return {
     id: String(row.id),
     type: String(row.type || 'Mixed waste'),
@@ -273,7 +292,7 @@ function mapRowToReport(row: Record<string, unknown>): StoredReport {
     lng: Number(row.lng) || 73.8567,
     status: (row.status as StoredReport['status']) || 'Submitted',
     priority: (row.priority as StoredReport['priority']) || 'Medium',
-    time: row.time ? String(row.time) : undefined,
+    time: formatRelativeTime(createdAt),
     icon: String(row.icon || 'MW'),
     description: row.description ? String(row.description) : undefined,
     image: row.image ? String(row.image) : undefined,
@@ -285,7 +304,7 @@ function mapRowToReport(row: Record<string, unknown>): StoredReport {
     reporterEmail: row.reporter_email ? String(row.reporter_email) : undefined,
     citizenPhone,
     reporterPhone: citizenPhone,
-    createdAt: row.created_at ? new Date(String(row.created_at)).toISOString() : new Date().toISOString(),
+    createdAt,
     estimatedClearance: row.estimated_clearance ? String(row.estimated_clearance) : undefined,
     greenPointsAwarded: Number(row.green_points_awarded) || 50,
   }
@@ -310,6 +329,7 @@ export async function insertNeonReport(report: StoredReport): Promise<boolean> {
   try {
     await ensureNeonSchema()
     const phone = report.citizenPhone || report.reporterPhone || '+91 98220 88711'
+    const dbTime = formatFullDateTime(report.createdAt) || new Date().toLocaleString('en-IN')
     await sql`
       INSERT INTO reports (
         id, type, category, location, address_details, lat, lng,
@@ -320,7 +340,7 @@ export async function insertNeonReport(report: StoredReport): Promise<boolean> {
       ) VALUES (
         ${report.id}, ${report.type}, ${report.category}, ${report.location},
         ${report.addressDetails || null}, ${report.lat || 18.5204}, ${report.lng || 73.8567},
-        ${report.status}, ${report.priority}, ${report.time || 'Just now'}, ${report.icon},
+        ${report.status}, ${report.priority}, ${dbTime}, ${report.icon},
         ${report.description || null}, ${report.image || null}, ${report.proofImage || null},
         ${report.reporterName || 'Citizen User'}, ${report.reporterEmail || null},
         ${phone}, ${phone},
@@ -330,6 +350,7 @@ export async function insertNeonReport(report: StoredReport): Promise<boolean> {
       )
       ON CONFLICT (id) DO UPDATE SET
         status = EXCLUDED.status,
+        time = EXCLUDED.time,
         assigned_driver = EXCLUDED.assigned_driver,
         vehicle_number = EXCLUDED.vehicle_number,
         driver_phone = EXCLUDED.driver_phone,
@@ -845,15 +866,18 @@ export async function fetchNeonNotifications(): Promise<NotificationItem[]> {
   try {
     await ensureNeonSchema()
     const rows = (await sql`SELECT * FROM notifications ORDER BY created_at DESC LIMIT 30;`) as unknown as Record<string, unknown>[]
-    return rows.map((r) => ({
-      id: String(r.id),
-      title: String(r.title),
-      message: String(r.message),
-      time: String(r.time || 'Just now'),
-      read: Boolean(r.read),
-      type: (r.type as NotificationItem['type']) || 'system',
-      createdAt: r.created_at ? new Date(String(r.created_at)).toISOString() : new Date().toISOString(),
-    }))
+    return rows.map((r) => {
+      const createdAt = r.created_at ? new Date(String(r.created_at)).toISOString() : new Date().toISOString()
+      return {
+        id: String(r.id),
+        title: String(r.title),
+        message: String(r.message),
+        time: formatRelativeTime(createdAt),
+        read: Boolean(r.read),
+        type: (r.type as NotificationItem['type']) || 'system',
+        createdAt,
+      }
+    })
   } catch (err) {
     console.error('Neon: error fetching notifications:', err)
     return []
@@ -866,11 +890,13 @@ export async function insertNeonNotification(n: NotificationItem): Promise<boole
   try {
     await ensureNeonSchema()
     const createdAt = n.createdAt || new Date().toISOString()
+    const dbTime = formatFullDateTime(createdAt) || new Date().toLocaleString('en-IN')
     await sql`
       INSERT INTO notifications (id, title, message, time, read, type, created_at)
-      VALUES (${n.id}, ${n.title}, ${n.message}, ${n.time}, ${n.read}, ${n.type}, ${createdAt})
+      VALUES (${n.id}, ${n.title}, ${n.message}, ${dbTime}, ${n.read}, ${n.type}, ${createdAt})
       ON CONFLICT (id) DO UPDATE SET
-        read = EXCLUDED.read;
+        read = EXCLUDED.read,
+        time = EXCLUDED.time;
     `
     return true
   } catch (err) {
