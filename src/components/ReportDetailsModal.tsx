@@ -41,10 +41,10 @@ export function ReportDetailsModal({ report, onClose, onToast }: ReportDetailsMo
       status: report.status !== 'Submitted' ? 'done' : 'active',
     },
     {
-      title: 'Crew Assigned',
-      time: report.assignedDriver ? 'Assigned' : 'In dispatch queue',
-      desc: report.assignedDriver ? `${report.assignedDriver} (${report.vehicleNumber || 'MH 12 AB 2840'})` : 'Auto-allocating nearest available vehicle',
-      status: report.status === 'Assigned' || report.status === 'Team on way' || report.status === 'In progress' || report.status === 'Resolved' ? 'done' : 'pending',
+      title: 'Crew Assignment',
+      time: report.assignedDriver ? 'Assigned' : report.status === 'Pending' ? 'Pending Acceptance' : 'In dispatch queue',
+      desc: report.assignedDriver ? `${report.assignedDriver} (${report.vehicleNumber || 'MH 12 AB 2840'})` : 'Waiting for municipal driver to accept assignment',
+      status: report.assignedDriver || report.status === 'Assigned' || report.status === 'Team on way' || report.status === 'In progress' || report.status === 'Resolved' ? 'done' : 'active',
     },
     {
       title: 'Collection & Site Clearance',

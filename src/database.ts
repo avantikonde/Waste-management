@@ -1022,7 +1022,7 @@ export const database = {
   },
 
   addReport(report: StoredReport): StoredReport {
-    // 1. Smart Municipal Auto-Dispatch
+    // 1. Prepare report in Pending stage (awaiting driver acceptance)
     const activeDriver = database.getDriverProfile()
     const driver = findNearestDriver(report.lat, report.lng, activeDriver)
     const createdAt = report.createdAt || new Date().toISOString()
@@ -1032,14 +1032,13 @@ export const database = {
       ...report,
       createdAt,
       time: formatRelativeTime(createdAt),
-      status: report.status === 'Submitted' ? 'Assigned' : report.status,
-      assignedDriver: report.assignedDriver || driver.name,
-      vehicleNumber: report.vehicleNumber || driver.vehicleNumber,
-      driverPhone: report.driverPhone || driver.phone,
+      status: 'Pending',
+      assignedDriver: undefined,
+      vehicleNumber: undefined,
+      driverPhone: undefined,
       citizenPhone,
       reporterPhone: citizenPhone,
-      estimatedClearance:
-        report.estimatedClearance || getDynamicClearanceEstimate(createdAt, 'Assigned', 35),
+      estimatedClearance: 'Awaiting Driver Acceptance',
     }
 
     const currentReports = database.getReports()
@@ -1047,7 +1046,7 @@ export const database = {
     write(keys.reports, next)
     database.addGreenPoints(50)
 
-    // 2. Automatically dispatch route stop to driver's queue with accurate clock window
+    // 2. Dispatch pending stop to nearby driver's queue with 'New' status (awaiting confirmation)
     const distanceKm =
       Math.round(
         Math.hypot(
@@ -1084,12 +1083,12 @@ export const database = {
       upsertNeonAssignment(newAssignment).catch((err) => console.warn('Neon assignment insert error:', err))
     }
 
-    // 3. Notify citizen with assigned driver contact & vehicle
+    // 3. Notify citizen that report is logged and pending driver confirmation
     const notifTime = new Date().toISOString()
     database.addNotification({
       id: `NOTIF-${Date.now()}`,
-      title: '🚛 Municipal Driver Dispatched!',
-      message: `${driver.name} (${driver.vehicleNumber}) has been assigned to ${enrichedReport.id}. Contact: ${driver.phone}. ${enrichedReport.estimatedClearance}.`,
+      title: '📋 Incident Reported (Pending Acceptance)',
+      message: `Your report ${enrichedReport.id} is registered in Pending stage. Dispatched to nearby municipal crew for acceptance.`,
       time: formatRelativeTime(notifTime),
       createdAt: notifTime,
       read: false,
@@ -1124,8 +1123,8 @@ export const database = {
         let nextStatus = a.status
         if (updates.status === 'Resolved') nextStatus = 'Collected'
         else if (updates.status === 'In progress') nextStatus = 'Arrived'
-        else if (updates.status === 'Team on way') nextStatus = 'Accepted'
-        else if (updates.status === 'Assigned' || updates.status === 'Submitted') nextStatus = 'New'
+        else if (updates.status === 'Assigned' || updates.status === 'Team on way') nextStatus = 'Accepted'
+        else if (updates.status === 'Pending' || updates.status === 'Submitted') nextStatus = 'New'
 
         const updatedAssignment: DriverAssignment = {
           ...a,
@@ -1627,9 +1626,34 @@ export const database = {
         }
       } else {
         if (status === 'Accepted') {
-          database.updateReport(assignment.reportId, { status: 'Team on way' })
+          const activeDriver = database.getDriverProfile()
+          const driverName = assignment.driverName || activeDriver.name
+          const vehicleNumber = assignment.vehicleNumber || activeDriver.vehicleNumber
+          const driverPhone = assignment.driverPhone || activeDriver.phone
+
+          database.updateReport(assignment.reportId, {
+            status: 'Assigned',
+            assignedDriver: driverName,
+            vehicleNumber,
+            driverPhone,
+            estimatedClearance: 'Assigned · Crew En Route',
+          })
+
+          const notifTime = new Date().toISOString()
+          database.addNotification({
+            id: `NOTIF-${Date.now()}`,
+            title: '🚛 Driver Assigned & Confirmed!',
+            message: `Driver ${driverName} (${vehicleNumber}) has accepted report ${assignment.reportId}. Status is now Assigned! Contact: ${driverPhone}.`,
+            time: formatRelativeTime(notifTime),
+            createdAt: notifTime,
+            read: false,
+            type: 'report',
+          })
         } else if (status === 'Arrived') {
-          database.updateReport(assignment.reportId, { status: 'In progress' })
+          database.updateReport(assignment.reportId, {
+            status: 'In progress',
+            estimatedClearance: 'Crew on site clearing waste',
+          })
         } else if (status === 'Collected') {
           database.updateReport(assignment.reportId, {
             status: 'Resolved',

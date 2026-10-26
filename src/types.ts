@@ -8,7 +8,7 @@ export type WasteCategory =
 
 export type ReportPriority = 'Low' | 'Medium' | 'High' | 'Critical'
 
-export type ReportStatus = 'Submitted' | 'Assigned' | 'Team on way' | 'In progress' | 'Resolved'
+export type ReportStatus = 'Pending' | 'Submitted' | 'Assigned' | 'Team on way' | 'In progress' | 'Resolved'
 
 export interface StoredReport {
   id: string

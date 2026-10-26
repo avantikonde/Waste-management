@@ -94,7 +94,7 @@ export function AdminView({
   // Filtered reports
   const triageReports = useMemo(() => {
     return reports.filter((r) => {
-      if (triageFilter === 'Unassigned') return r.status === 'Submitted'
+      if (triageFilter === 'Unassigned') return r.status === 'Submitted' || r.status === 'Pending'
       if (triageFilter === 'In progress') return r.status === 'In progress' || r.status === 'Team on way'
       if (triageFilter === 'Resolved') return r.status === 'Resolved'
       if (triageFilter === 'Active') return r.status !== 'Resolved'

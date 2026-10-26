@@ -1037,6 +1037,7 @@
   background-color: currentColor;
 }
 
+.status-pill.pending,
 .status-pill.submitted {
   background-color: var(--purple-light);
   color: var(--purple);

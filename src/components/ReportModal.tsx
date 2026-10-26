@@ -80,7 +80,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
   const [citizenPhone, setCitizenPhone] = useState('')
   const [isLocating, setIsLocating] = useState(() => typeof navigator !== 'undefined' && 'geolocation' in navigator)
 
-  // Auto-detect current live GPS on open
+  // Auto-detect current live GPS on open (runs once silently without toast loop)
   useEffect(() => {
     let active = true
 
@@ -99,7 +99,6 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
           lng: fix.lng,
           isLiveGps: true,
         })
-        onToast(`📍 Current location detected: ${geo.area}, ${geo.city} (±${Math.round(fix.accuracy)}m)`)
       })
       .catch(() => {
         if (active) setIsLocating(false)
@@ -108,7 +107,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
     return () => {
       active = false
     }
-  }, [onToast])
+  }, [])
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -163,7 +162,7 @@ export function ReportModal({ onClose, onSubmit, onToast }: ReportModalProps) {
       addressDetails: description || 'Civic community report',
       lat: coordinates.lat,
       lng: coordinates.lng,
-      status: 'Submitted',
+      status: 'Pending',
       priority,
       time: formatFullDateTime(nowIso),
       icon: iconCode,

@@ -142,6 +142,7 @@ export function ReportsView({
             aria-label="Filter by status"
           >
             <option value="All">All Statuses</option>
+            <option value="Pending">Pending</option>
             <option value="Submitted">Submitted</option>
             <option value="Assigned">Assigned</option>
             <option value="Team on way">Team on way</option>

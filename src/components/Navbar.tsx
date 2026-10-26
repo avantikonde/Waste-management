@@ -8,11 +8,9 @@ import {
   Truck,
   User,
   LogOut,
-  Database,
   MapPin,
 } from 'lucide-react'
 import type { NotificationItem, UserSession, UserLocationState } from '../types'
-import { database } from '../database'
 import { NotificationsPopover } from './NotificationsPopover'
 
 interface NavbarProps {
@@ -96,36 +94,6 @@ export function Navbar({
       </div>
 
       <div className="topbar-actions" ref={popoverRef}>
-        {database.isNeonConfigured() && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-full)',
-              backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.28)',
-              fontSize: '11.5px',
-              fontWeight: 600,
-              color: 'var(--primary)',
-            }}
-            title="Connected to Neon PostgreSQL cloud database"
-          >
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: 'var(--primary)',
-                boxShadow: '0 0 6px var(--primary)',
-              }}
-            />
-            <Database size={13} />
-            <span>Neon Postgres</span>
-          </div>
-        )}
-
         {/* Live GPS Tracking Badge & Location Picker Trigger */}
         {(onOpenLocationPicker || onRefreshGps) && (
           <button

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Check, X } from 'lucide-react'
 import type {
   StoredReport,
@@ -65,12 +65,12 @@ export default function App() {
   const [userLoc, setUserLoc] = useState<UserLocationState>(() => database.getLocation())
   const [showLocationPickerModal, setShowLocationPickerModal] = useState(false)
 
-  const showToast = (message: string) => {
+  const showToast = useCallback((message: string) => {
     setToast(message)
     window.setTimeout(() => {
       setToast((curr) => (curr === message ? '' : curr))
     }, 3600)
-  }
+  }, [])
 
   // High-precision live GPS Tracker on mount & watch
   useEffect(() => {
@@ -127,7 +127,7 @@ export default function App() {
         navigator.geolocation.clearWatch(watchId)
       }
     }
-  }, [])
+  }, [showToast])
 
   const handleRefreshGps = async () => {
     showToast('🛰️ Acquiring high-precision GPS satellite fix...')
@@ -177,7 +177,7 @@ export default function App() {
       unsub()
       window.clearInterval(timerId)
     }
-  }, [])
+  }, [showToast])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -265,7 +265,7 @@ export default function App() {
     setGreenPoints(database.getGreenPoints())
     setNotifications(database.getNotifications())
     setModal(null)
-    showToast(`${newReport.id} submitted! +50 Green Points credited.`)
+    showToast(`${newReport.id} submitted! Status: Pending driver acceptance. +50 Green Points credited.`)
   }
 
   const handleAddPickup = (newPickup: StoredPickup) => {
