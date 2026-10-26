@@ -160,20 +160,40 @@ export function Navbar({
           </button>
         )}
 
-        {/* Role Selector */}
-        <div className="role-pill" title="Switch workspace role view">
-          {getRoleIcon()}
-          <select
-            className="role-select"
-            value={role}
-            onChange={(e) => onChangeRole(e.target.value as 'Citizen' | 'Driver' | 'Admin')}
-            aria-label="Workspace Role"
+        {/* Role Selector: Locked for Citizen & Driver, Switchable only for Municipal Admin */}
+        {session?.role === 'Admin' ? (
+          <div className="role-pill" title="Supervisor oversight: switch workspace perspective">
+            {getRoleIcon()}
+            <select
+              className="role-select"
+              value={role}
+              onChange={(e) => onChangeRole(e.target.value as 'Citizen' | 'Driver' | 'Admin')}
+              aria-label="Admin View Switcher"
+            >
+              <option value="Admin">Admin Command</option>
+              <option value="Citizen">Preview: Citizen</option>
+              <option value="Driver">Preview: Driver</option>
+            </select>
+          </div>
+        ) : session?.role === 'Driver' ? (
+          <div
+            className="role-pill locked-role"
+            title="Account designated as Municipal Driver Crew"
+            style={{ cursor: 'default', userSelect: 'none' }}
           >
-            <option value="Citizen">Citizen</option>
-            <option value="Driver">Driver (Crew)</option>
-            <option value="Admin">Admin (Municipal)</option>
-          </select>
-        </div>
+            <Truck size={14} style={{ color: '#0284c7' }} />
+            <span style={{ fontSize: '12.5px', fontWeight: 600 }}>Driver Crew</span>
+          </div>
+        ) : (
+          <div
+            className="role-pill locked-role"
+            title="Account designated as Citizen / Resident"
+            style={{ cursor: 'default', userSelect: 'none' }}
+          >
+            <User size={14} style={{ color: 'var(--primary)' }} />
+            <span style={{ fontSize: '12.5px', fontWeight: 600 }}>Citizen</span>
+          </div>
+        )}
 
         {/* Theme Toggle */}
         <button

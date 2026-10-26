@@ -39,8 +39,16 @@ type ModalType = 'report' | 'pickup' | 'rewards' | null
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(() => database.getSession())
   const [theme, setTheme] = useState<'light' | 'dark'>(() => database.getTheme())
-  const [role, setRole] = useState<'Citizen' | 'Driver' | 'Admin'>('Citizen')
-  const [activeNav, setActiveNav] = useState('Overview')
+  const [role, setRole] = useState<'Citizen' | 'Driver' | 'Admin'>(() => {
+    const s = database.getSession()
+    return s?.role || 'Citizen'
+  })
+  const [activeNav, setActiveNav] = useState(() => {
+    const s = database.getSession()
+    if (s?.role === 'Driver') return 'Driver Dashboard'
+    if (s?.role === 'Admin') return 'Admin Command'
+    return 'Overview'
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [modal, setModal] = useState<ModalType>(null)
   const [selectedReport, setSelectedReport] = useState<StoredReport | null>(null)
@@ -181,6 +189,11 @@ export default function App() {
   }
 
   const handleRoleChange = (newRole: 'Citizen' | 'Driver' | 'Admin') => {
+    // Only municipal supervisor (Admin) can switch workspace perspectives
+    if (session?.role !== 'Admin') {
+      showToast(`Access restricted: your account is designated as ${session?.role || 'Citizen'}.`)
+      return
+    }
     setRole(newRole)
     if (newRole === 'Driver') {
       setActiveNav('Driver Dashboard')
@@ -189,19 +202,32 @@ export default function App() {
     } else {
       setActiveNav('Overview')
     }
-    showToast(`Switched to ${newRole} workspace`)
+    showToast(`Supervisor: switched preview perspective to ${newRole}`)
   }
 
   const handleSignIn = (email: string, pass: string): boolean => {
     const userSession = database.signIn(email, pass)
     if (userSession) {
       setSession(userSession)
+      setRole(userSession.role)
+      if (userSession.role === 'Driver') {
+        setActiveNav('Driver Dashboard')
+      } else if (userSession.role === 'Admin') {
+        setActiveNav('Admin Command')
+      } else {
+        setActiveNav('Overview')
+      }
       return true
     }
     return false
   }
 
-  const handleSignUp = (name: string, email: string, pass: string): boolean => {
+  const handleSignUp = (
+    name: string,
+    email: string,
+    pass: string,
+    userRole: 'Citizen' | 'Driver' | 'Admin'
+  ): boolean => {
     const existing = database.getUsers().find((u) => u.email.toLowerCase() === email.toLowerCase())
     if (existing) return false
 
@@ -209,17 +235,27 @@ export default function App() {
       name,
       email,
       password: pass,
-      role: 'Citizen',
-      greenPoints: 1240,
+      role: userRole,
+      greenPoints: userRole === 'Citizen' ? 1240 : 0,
       createdAt: new Date().toISOString(),
     })
     setSession(newSession)
+    setRole(userRole)
+    if (userRole === 'Driver') {
+      setActiveNav('Driver Dashboard')
+    } else if (userRole === 'Admin') {
+      setActiveNav('Admin Command')
+    } else {
+      setActiveNav('Overview')
+    }
     return true
   }
 
   const handleSignOut = () => {
     database.signOut()
     setSession(null)
+    setRole('Citizen')
+    setActiveNav('Overview')
     showToast('Signed out of CleanConnect')
   }
 
@@ -283,6 +319,10 @@ export default function App() {
     )
   }
 
+  // Determine effective workspace role (strictly locked for non-admins)
+  const effectiveRole: 'Citizen' | 'Driver' | 'Admin' =
+    session.role === 'Admin' ? role : session.role || 'Citizen'
+
   // Determine active view based on role & navigation
   const renderActiveView = () => {
     // Universal routes accessible across all roles
@@ -306,7 +346,7 @@ export default function App() {
       return <HelpView onToast={showToast} />
     }
 
-    if (role === 'Driver') {
+    if (effectiveRole === 'Driver') {
       switch (activeNav) {
         case 'Route Map':
           return (
@@ -331,7 +371,7 @@ export default function App() {
       }
     }
 
-    if (role === 'Admin') {
+    if (effectiveRole === 'Admin') {
       switch (activeNav) {
         case 'All Citizen Reports':
           return (
@@ -415,22 +455,6 @@ export default function App() {
         )
       case 'Activity':
         return <ActivityView />
-      case 'Help center':
-        return <HelpView onToast={showToast} />
-      case 'Settings':
-        return (
-          <SettingsView
-            session={session}
-            onUpdateProfile={(updatedName, updatedEmail, updatedCity) => {
-              setSession((curr) =>
-                curr
-                  ? { ...curr, name: updatedName, email: updatedEmail, city: updatedCity }
-                  : null
-              )
-            }}
-            onToast={showToast}
-          />
-        )
       case 'Overview':
       default:
         return (
@@ -454,7 +478,7 @@ export default function App() {
       {/* Sidebar Navigation */}
       <Sidebar
         activeNav={activeNav}
-        role={role}
+        role={effectiveRole}
         mobileOpen={mobileOpen}
         reportCount={reports.length}
         pickupCount={pickups.length}
@@ -468,7 +492,7 @@ export default function App() {
         {/* Top Navigation Bar */}
         <Navbar
           activeNav={activeNav}
-          role={role}
+          role={effectiveRole}
           theme={theme}
           session={session}
           notifications={notifications}

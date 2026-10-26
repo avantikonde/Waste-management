@@ -8,13 +8,15 @@ import {
   Sun,
   ShieldCheck,
   Sparkles,
+  User,
+  Truck,
 } from 'lucide-react'
 
 interface AuthViewProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   onSignIn: (email: string, password: string) => boolean | Promise<boolean>
-  onSignUp: (name: string, email: string, password: string) => boolean | Promise<boolean>
+  onSignUp: (name: string, email: string, password: string, role: 'Citizen' | 'Driver' | 'Admin') => boolean | Promise<boolean>
   onToast: (msg: string) => void
 }
 
@@ -26,6 +28,7 @@ export function AuthView({
   onToast,
 }: AuthViewProps) {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
+  const [selectedRole, setSelectedRole] = useState<'Citizen' | 'Driver' | 'Admin'>('Citizen')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -47,11 +50,11 @@ export function AuthView({
           onToast('Please enter your full name')
           return
         }
-        const success = await onSignUp(name, email, password)
+        const success = await onSignUp(name, email, password, selectedRole)
         if (!success) {
           onToast('An account with this email already exists.')
         } else {
-          onToast(`Account created for ${name}! Saved to database.`)
+          onToast(`Account created as ${selectedRole} for ${name}! Saved to database.`)
         }
       }
     } finally {
@@ -59,12 +62,27 @@ export function AuthView({
     }
   }
 
-  const handleDemoAutofill = () => {
-    setEmail('rohan.patil@cleanconnect.pune')
-    setPassword('password123')
-    setName('Rohan Patil')
-    setMode('signup')
-    onToast('Demo Pune citizen credentials pre-filled. Click Create Account!')
+  const handleDemoLogin = (demoRole: 'Citizen' | 'Driver' | 'Admin') => {
+    if (demoRole === 'Citizen') {
+      setEmail('rohan.patil@cleanconnect.pune')
+      setPassword('password123')
+      setName('Rohan Patil')
+      setSelectedRole('Citizen')
+      onToast('Autofilled Citizen demo account (Rohan Patil). Click Sign In!')
+    } else if (demoRole === 'Driver') {
+      setEmail('driver.ravi@cleanconnect.pune')
+      setPassword('password123')
+      setName('Driver Ravi Kumar')
+      setSelectedRole('Driver')
+      onToast('Autofilled Driver crew demo account (Ravi Kumar). Click Sign In!')
+    } else {
+      setEmail('admin.deshmukh@cleanconnect.pune')
+      setPassword('password123')
+      setName('Supervisor Deshmukh')
+      setSelectedRole('Admin')
+      onToast('Autofilled Municipal Admin demo account (Supervisor Deshmukh). Click Sign In!')
+    }
+    setMode('signin')
   }
 
   return (
@@ -132,12 +150,150 @@ export function AuthView({
             <h2>{mode === 'signin' ? 'Welcome back' : 'Create an account'}</h2>
             <p>
               {mode === 'signin'
-                ? 'Sign in to monitor your civic reports and collection vehicles.'
-                : 'Join your neighborhood stewards and start earning Green Points.'}
+                ? 'Sign in to access your designated municipal workspace.'
+                : 'Select your account role to join Pune’s smart sanitation network.'}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="form-stack">
+            {mode === 'signup' && (
+              <div className="auth-role-picker" style={{ marginBottom: '14px' }}>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: 'var(--text-secondary)',
+                    marginBottom: '8px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                  }}
+                >
+                  Select Account Role
+                </span>
+
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '8px',
+                  }}
+                >
+                  {/* Citizen Role */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('Citizen')}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 6px',
+                      borderRadius: 'var(--radius-md)',
+                      border:
+                        selectedRole === 'Citizen'
+                          ? '2px solid var(--primary)'
+                          : '1px solid var(--border)',
+                      backgroundColor:
+                        selectedRole === 'Citizen'
+                          ? 'var(--primary-subtle, rgba(16, 185, 129, 0.12))'
+                          : 'var(--bg-subtle)',
+                      color:
+                        selectedRole === 'Citizen'
+                          ? 'var(--primary)'
+                          : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                    }}
+                  >
+                    <User size={20} />
+                    <span style={{ fontSize: '12px', fontWeight: 700 }}>Citizen</span>
+                    <span style={{ fontSize: '10px', opacity: 0.8 }}>Resident</span>
+                  </button>
+
+                  {/* Driver Role */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('Driver')}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 6px',
+                      borderRadius: 'var(--radius-md)',
+                      border:
+                        selectedRole === 'Driver'
+                          ? '2px solid #0284c7'
+                          : '1px solid var(--border)',
+                      backgroundColor:
+                        selectedRole === 'Driver'
+                          ? 'rgba(2, 132, 199, 0.12)'
+                          : 'var(--bg-subtle)',
+                      color:
+                        selectedRole === 'Driver'
+                          ? '#0284c7'
+                          : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                    }}
+                  >
+                    <Truck size={20} />
+                    <span style={{ fontSize: '12px', fontWeight: 700 }}>Driver</span>
+                    <span style={{ fontSize: '10px', opacity: 0.8 }}>Fleet Crew</span>
+                  </button>
+
+                  {/* Admin Role */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedRole('Admin')}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '10px 6px',
+                      borderRadius: 'var(--radius-md)',
+                      border:
+                        selectedRole === 'Admin'
+                          ? '2px solid #f59e0b'
+                          : '1px solid var(--border)',
+                      backgroundColor:
+                        selectedRole === 'Admin'
+                          ? 'rgba(245, 158, 11, 0.12)'
+                          : 'var(--bg-subtle)',
+                      color:
+                        selectedRole === 'Admin'
+                          ? '#d97706'
+                          : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                    }}
+                  >
+                    <ShieldCheck size={20} />
+                    <span style={{ fontSize: '12px', fontWeight: 700 }}>Admin</span>
+                    <span style={{ fontSize: '10px', opacity: 0.8 }}>Supervisor</span>
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: '8px',
+                    fontSize: '11px',
+                    color: 'var(--text-muted)',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  {selectedRole === 'Citizen' &&
+                    '👤 Citizen: Report waste spots, book doorstep pickups & earn Green Points.'}
+                  {selectedRole === 'Driver' &&
+                    '🚛 Driver: Dedicated crew console, route stops & clearance verification.'}
+                  {selectedRole === 'Admin' &&
+                    '🛡️ Admin: Municipal supervisor board, fleet oversight & ward analytics.'}
+                </div>
+              </div>
+            )}
+
             {mode === 'signup' && (
               <label className="form-label">
                 <span>Full Name</span>
@@ -188,7 +344,7 @@ export function AuthView({
                 </>
               ) : (
                 <>
-                  <UserPlus size={16} /> Create Free Account
+                  <UserPlus size={16} /> Create {selectedRole} Account
                 </>
               )}
             </button>
@@ -205,21 +361,87 @@ export function AuthView({
           </button>
 
           {/* Quick Demo Autofill helper */}
-          <div className="demo-credentials-banner">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <strong style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <ShieldCheck size={14} /> Demo Browser Storage
+          <div className="demo-credentials-banner" style={{ marginTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <strong style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+                <ShieldCheck size={14} /> Quick Demo Accounts
               </strong>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>1-click autofill</span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
               <button
                 type="button"
-                style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '11px', textDecoration: 'underline' }}
-                onClick={handleDemoAutofill}
+                onClick={() => handleDemoLogin('Citizen')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  padding: '6px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                title="Autofill Citizen (Rohan Patil)"
               >
-                Autofill demo login
+                <User size={13} style={{ color: 'var(--primary)' }} />
+                <span>Citizen</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('Driver')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  padding: '6px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                title="Autofill Driver (Ravi Kumar)"
+              >
+                <Truck size={13} style={{ color: '#0284c7' }} />
+                <span>Driver</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDemoLogin('Admin')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  padding: '6px 4px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border)',
+                  backgroundColor: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                title="Autofill Admin (Supervisor Deshmukh)"
+              >
+                <ShieldCheck size={13} style={{ color: '#f59e0b' }} />
+                <span>Admin</span>
               </button>
             </div>
-            <p>
-              Data persists locally in this browser. You can seamlessly switch between Citizen, Driver, and Admin roles from the top bar.
+
+            <p style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+              Connected to live Neon PostgreSQL database. Accounts strictly lock to their designated role workspace.
             </p>
           </div>
         </div>

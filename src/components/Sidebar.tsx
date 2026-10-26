@@ -201,7 +201,7 @@ export function Sidebar({
               </div>
               <div className="user-info">
                 <strong>{session.name || 'Citizen'}</strong>
-                <small>{session.email || 'citizen@cleanconnect.pune'}</small>
+                <small>{session.role || 'Citizen'} · {session.email || 'citizen@cleanconnect.pune'}</small>
               </div>
             </div>
           )}
