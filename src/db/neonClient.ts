@@ -17,7 +17,13 @@ import { getLocalDateString, formatFullDateTime, formatRelativeTime } from '../u
 neonConfig.fetchEndpoint = (host) => `https://${host}/sql`
 neonConfig.disableWarningInBrowsers = true
 
-const rawDbUrl = ((import.meta.env.VITE_DATABASE_URL as string | undefined) || '').trim()
+const DEFAULT_NEON_DB_URL =
+  'postgresql://neondb_owner:npg_pVIt5wu6ejyJ@ep-winter-lake-aysbswet-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require'
+
+const rawDbUrl = (
+  (import.meta.env.VITE_DATABASE_URL as string | undefined) ||
+  DEFAULT_NEON_DB_URL
+).trim()
 const cleanDbUrl = rawDbUrl.replace(/[&?]channel_binding=require/g, '')
 
 export const isNeonConfigured = Boolean(

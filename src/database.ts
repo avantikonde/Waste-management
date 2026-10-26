@@ -740,24 +740,11 @@ function sanitizeAndRefreshSlots(list: DriverAvailabilitySlot[]): {
 export async function syncFromNeon(): Promise<boolean> {
   if (!isNeonConfigured) return false
   try {
-    // Step 1: Push local state to Neon first so any locally created reports/users/pickups are persisted in Neon
     const localUsers = database.getUsers()
     const localReports = database.getReports()
     const localPickups = database.getPickups()
-    const localSlots = database.getDriverAvailability()
-    const localAssignments = database.getDriverAssignments()
-    const localDriverProfile = database.getDriverProfile()
 
-    await Promise.allSettled([
-      ...localUsers.map((u) => insertNeonUser(u)),
-      ...localReports.map((r) => insertNeonReport(r)),
-      ...localPickups.map((p) => insertNeonPickup(p)),
-      ...localSlots.map((s) => upsertNeonAvailabilitySlot(s)),
-      ...localAssignments.map((a) => upsertNeonAssignment(a)),
-      upsertNeonDriverProfile(localDriverProfile),
-    ])
-
-    // Step 2: Fetch merged state from Neon
+    // Fetch remote state from Neon
     const [
       remoteReports,
       remotePickups,
@@ -777,6 +764,25 @@ export async function syncFromNeon(): Promise<boolean> {
       fetchNeonAssignments(),
       fetchNeonDriverProfile(),
     ])
+
+    // Push ONLY missing local records up to Neon (avoids flooding network with redundant queries)
+    const remoteEmailSet = new Set((remoteUsers || []).map((u) => u.email.toLowerCase()))
+    const unsyncedUsers = localUsers.filter((u) => !remoteEmailSet.has(u.email.toLowerCase()))
+    if (unsyncedUsers.length > 0) {
+      await Promise.allSettled(unsyncedUsers.map((u) => insertNeonUser(u)))
+    }
+
+    const remoteReportIdSet = new Set((remoteReports || []).map((r) => r.id))
+    const unsyncedReports = localReports.filter((r) => !remoteReportIdSet.has(r.id))
+    if (unsyncedReports.length > 0) {
+      await Promise.allSettled(unsyncedReports.map((r) => insertNeonReport(r)))
+    }
+
+    const remotePickupIdSet = new Set((remotePickups || []).map((p) => p.id))
+    const unsyncedPickups = localPickups.filter((p) => !remotePickupIdSet.has(p.id))
+    if (unsyncedPickups.length > 0) {
+      await Promise.allSettled(unsyncedPickups.map((p) => insertNeonPickup(p)))
+    }
 
     let changed = false
 

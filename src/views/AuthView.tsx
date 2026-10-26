@@ -13,8 +13,8 @@ import {
 interface AuthViewProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
-  onSignIn: (email: string, password: string) => boolean
-  onSignUp: (name: string, email: string, password: string) => boolean
+  onSignIn: (email: string, password: string) => boolean | Promise<boolean>
+  onSignUp: (name: string, email: string, password: string) => boolean | Promise<boolean>
   onToast: (msg: string) => void
 }
 
@@ -29,27 +29,33 @@ export function AuthView({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (mode === 'signin') {
-      const success = onSignIn(email, password)
-      if (!success) {
-        onToast('Incorrect email or password. Please try again or create an account.')
+    setIsSubmitting(true)
+    try {
+      if (mode === 'signin') {
+        const success = await onSignIn(email, password)
+        if (!success) {
+          onToast('Incorrect email or password. Please try again or create an account.')
+        } else {
+          onToast('Welcome to CleanConnect! Connected to database.')
+        }
       } else {
-        onToast('Welcome back to CleanConnect!')
+        if (!name.trim()) {
+          onToast('Please enter your full name')
+          return
+        }
+        const success = await onSignUp(name, email, password)
+        if (!success) {
+          onToast('An account with this email already exists.')
+        } else {
+          onToast(`Account created for ${name}! Saved to database.`)
+        }
       }
-    } else {
-      if (!name.trim()) {
-        onToast('Please enter your full name')
-        return
-      }
-      const success = onSignUp(name, email, password)
-      if (!success) {
-        onToast('An account with this email already exists.')
-      } else {
-        onToast(`Account created for ${name}! Welcome.`)
-      }
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -171,8 +177,12 @@ export function AuthView({
               />
             </label>
 
-            <button type="submit" className="primary-btn" style={{ marginTop: '8px' }}>
-              {mode === 'signin' ? (
+            <button type="submit" className="primary-btn" style={{ marginTop: '8px' }} disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Sparkles size={16} /> Authenticating...
+                </>
+              ) : mode === 'signin' ? (
                 <>
                   <LogIn size={16} /> Sign In to Workspace
                 </>
